@@ -108,8 +108,8 @@ func (ca *ClerkAuth) GetUser(ctx context.Context, clerkID string) (*AuthUser, er
     }
 
     // Get profile image
-    if userObj.ProfileImageURL != nil {
-        authUser.AvatarURL = *userObj.ProfileImageURL
+    if userObj.ImageURL != nil {
+        authUser.AvatarURL = *userObj.ImageURL
     }
 
     return authUser, nil
