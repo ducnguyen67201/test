@@ -44,6 +44,7 @@ type AuthConfig struct {
 // ServerConfig holds server configuration
 type ServerConfig struct {
     Port         int
+    GRPCPort     int
     CorsOrigins  []string
     ReadTimeout  int
     WriteTimeout int
@@ -72,6 +73,7 @@ func Load() (*Config, error) {
         },
         Server: ServerConfig{
             Port:         getEnvInt("API_PORT", 8080),
+            GRPCPort:     getEnvInt("GRPC_PORT", 9090),
             CorsOrigins:  strings.Split(getEnv("API_CORS_ORIGINS", "http://localhost:3000"), ","),
             ReadTimeout:  getEnvInt("SERVER_READ_TIMEOUT", 10),
             WriteTimeout: getEnvInt("SERVER_WRITE_TIMEOUT", 10),

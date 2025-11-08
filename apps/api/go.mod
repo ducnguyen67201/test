@@ -8,12 +8,14 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/clerk/clerk-sdk-go/v2 v2.0.0
 	github.com/gin-gonic/gin v1.11.0
-	github.com/google/uuid v1.5.0
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
 	github.com/zerozero/proto v0.0.0-00010101000000-000000000000
 	google.golang.org/protobuf v1.36.9
 )
+
+require google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 
 require (
 	github.com/bytedance/sonic v1.14.0 // indirect
@@ -50,6 +52,7 @@ require (
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
+	google.golang.org/grpc v1.76.0
 )
 
 replace github.com/zerozero/proto => ../../proto
