@@ -24,7 +24,7 @@ import (
     "github.com/zerozero/apps/api/pkg/config"
     "github.com/zerozero/apps/api/pkg/logger"
 
-    userv1connect "github.com/zerozero/proto/gen/go/user/v1/v1connect"
+    userv1connect "github.com/zerozero/proto/gen/go/user/v1/userv1connect"
 )
 
 func main() {

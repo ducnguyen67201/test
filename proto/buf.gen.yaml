@@ -2,7 +2,7 @@ version: v1
 managed:
   enabled: true
   go_package_prefix:
-    default: github.com/zerozero/proto/gen
+    default: github.com/zerozero/proto/gen/go
 plugins:
   # Go generation
   - plugin: buf.build/protocolbuffers/go

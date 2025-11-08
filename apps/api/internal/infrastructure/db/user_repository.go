@@ -45,7 +45,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*entity.User, 
     if err != nil {
         if err == sql.ErrNoRows {
             return nil, errors.NewNotFound("User")
-        }
+        }   
         return nil, errors.NewDatabaseError("Failed to get user by ID").WithError(err)
     }
 

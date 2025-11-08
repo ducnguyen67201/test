@@ -2,9 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  experimental: {
-    serverActions: true,
-  },
   images: {
     domains: ['img.clerk.com', 'images.clerk.dev'],
   },

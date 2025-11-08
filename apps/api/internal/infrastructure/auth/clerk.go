@@ -6,13 +6,13 @@ import (
     "strings"
     "github.com/clerk/clerk-sdk-go/v2"
     clerkjwt "github.com/clerk/clerk-sdk-go/v2/jwt"
+    "github.com/clerk/clerk-sdk-go/v2/user"
     "github.com/gin-gonic/gin"
     "github.com/zerozero/apps/api/pkg/errors"
 )
 
 // ClerkAuth handles Clerk authentication
 type ClerkAuth struct {
-    client    *clerk.Client
     secretKey string
 }
 
@@ -22,13 +22,10 @@ func NewClerkAuth(secretKey string) (*ClerkAuth, error) {
         return nil, fmt.Errorf("clerk secret key is required")
     }
 
-    client, err := clerk.NewClient(secretKey)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create clerk client: %w", err)
-    }
+    // Set the global Clerk API key
+    clerk.SetKey(secretKey)
 
     return &ClerkAuth{
-        client:    client,
         secretKey: secretKey,
     }, nil
 }
@@ -62,18 +59,20 @@ func (ca *ClerkAuth) VerifyToken(tokenString string) (*AuthUser, error) {
         ClerkID: claims.Subject,
     }
 
-    // Get additional user info if available
-    if email, ok := claims.Extra["email"].(string); ok {
-        authUser.Email = email
-    }
-    if firstName, ok := claims.Extra["first_name"].(string); ok {
-        authUser.FirstName = firstName
-    }
-    if lastName, ok := claims.Extra["last_name"].(string); ok {
-        authUser.LastName = lastName
-    }
-    if avatarURL, ok := claims.Extra["image_url"].(string); ok {
-        authUser.AvatarURL = avatarURL
+    // Get additional user info from custom claims if available
+    if customMap, ok := claims.Custom.(map[string]interface{}); ok {
+        if email, ok := customMap["email"].(string); ok {
+            authUser.Email = email
+        }
+        if firstName, ok := customMap["first_name"].(string); ok {
+            authUser.FirstName = firstName
+        }
+        if lastName, ok := customMap["last_name"].(string); ok {
+            authUser.LastName = lastName
+        }
+        if avatarURL, ok := customMap["image_url"].(string); ok {
+            authUser.AvatarURL = avatarURL
+        }
     }
 
     return authUser, nil
@@ -81,21 +80,27 @@ func (ca *ClerkAuth) VerifyToken(tokenString string) (*AuthUser, error) {
 
 // GetUser gets a user from Clerk by ID
 func (ca *ClerkAuth) GetUser(ctx context.Context, clerkID string) (*AuthUser, error) {
-    user, err := ca.client.Users().Read(ctx, clerkID)
+    userObj, err := user.Get(ctx, clerkID)
     if err != nil {
         return nil, fmt.Errorf("failed to get user from clerk: %w", err)
     }
 
     authUser := &AuthUser{
-        ClerkID:   user.ID,
-        FirstName: *user.FirstName,
-        LastName:  *user.LastName,
+        ClerkID: userObj.ID,
+    }
+
+    // Set names if available
+    if userObj.FirstName != nil {
+        authUser.FirstName = *userObj.FirstName
+    }
+    if userObj.LastName != nil {
+        authUser.LastName = *userObj.LastName
     }
 
     // Get primary email
-    if user.PrimaryEmailAddressID != nil && len(user.EmailAddresses) > 0 {
-        for _, email := range user.EmailAddresses {
-            if email.ID == *user.PrimaryEmailAddressID {
+    if userObj.PrimaryEmailAddressID != nil && len(userObj.EmailAddresses) > 0 {
+        for _, email := range userObj.EmailAddresses {
+            if email.ID == *userObj.PrimaryEmailAddressID {
                 authUser.Email = email.EmailAddress
                 break
             }
@@ -103,8 +108,8 @@ func (ca *ClerkAuth) GetUser(ctx context.Context, clerkID string) (*AuthUser, er
     }
 
     // Get profile image
-    if user.ProfileImageURL != nil {
-        authUser.AvatarURL = *user.ProfileImageURL
+    if userObj.ProfileImageURL != nil {
+        authUser.AvatarURL = *userObj.ProfileImageURL
     }
 
     return authUser, nil
