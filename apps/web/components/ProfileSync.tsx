@@ -31,6 +31,9 @@ export function ProfileSync() {
     retry: 1,
   });
 
+  // Extract user data - handle the json wrapper from backend
+  const userData = userQuery.data?.json || userQuery.data;
+
   const handleSync = () => {
     syncMutation.mutate();
   };
@@ -73,34 +76,45 @@ export function ProfileSync() {
         ) : userQuery.error ? (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-600">Profile not found in database</p>
+            <p className="text-sm text-red-500 mt-1">Error: {userQuery.error.message}</p>
             <p className="text-sm text-red-500 mt-1">Click "Sync Profile" to create it</p>
           </div>
-        ) : userQuery.data ? (
+        ) : userData?.user ? (
           <div className="bg-gray-50 rounded-lg p-4 space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">Database ID:</span>
-              <span className="font-mono text-sm">{userQuery.data.user.id}</span>
+              <span className="font-mono text-sm">{userData.user.id}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Email:</span>
-              <span className="font-medium">{userQuery.data.user.email}</span>
+              <span className="font-medium">{userData.user.email}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">First Name:</span>
-              <span className="font-medium">{userQuery.data.user.first_name || '-'}</span>
+              <span className="font-medium">{userData.user.first_name || '-'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Last Name:</span>
-              <span className="font-medium">{userQuery.data.user.last_name || '-'}</span>
+              <span className="font-medium">{userData.user.last_name || '-'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Created:</span>
               <span className="text-sm">
-                {new Date(userQuery.data.user.created_at).toLocaleString()}
+                {new Date(userData.user.created_at).toLocaleString()}
               </span>
             </div>
+            {userData.created && (
+              <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                <p className="text-green-700 text-sm">✓ Profile just created</p>
+              </div>
+            )}
           </div>
-        ) : null}
+        ) : (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-yellow-700">Unexpected response from server</p>
+            <p className="text-sm text-yellow-600 mt-1">Please check the backend logs</p>
+          </div>
+        )}
       </div>
 
       {/* Sync Button and Status */}

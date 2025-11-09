@@ -31,7 +31,6 @@ export const appRouter = router({
         const data = await response.json();
         return data;
       } catch (error) {
-        console.error('Error fetching user:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch user data',
@@ -53,7 +52,6 @@ export const appRouter = router({
         const result = await grpcClient.syncUserProfile(token);
         return result;
       } catch (error) {
-        console.error('Error syncing profile:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to sync profile',
@@ -94,7 +92,6 @@ export const appRouter = router({
           const data = await response.json();
           return data;
         } catch (error) {
-          console.error('Error updating profile:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update profile',
