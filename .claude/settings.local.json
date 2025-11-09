@@ -9,7 +9,8 @@
       "Bash(go build:*)",
       "WebSearch",
       "WebFetch(domain:pkg.go.dev)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(go doc:*)"
     ],
     "deny": [],
     "ask": []

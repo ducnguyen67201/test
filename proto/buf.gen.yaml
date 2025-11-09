@@ -20,13 +20,15 @@ plugins:
     opt:
       - paths=source_relative
 
-  # TypeScript generation
-  - plugin: buf.build/bufbuild/es
+  # TypeScript generation (using local npm packages)
+  - plugin: protoc-gen-es
     out: gen/ts
     opt:
       - target=ts
+    path: D:/START_UP/zeroZero/node_modules/.bin/protoc-gen-es.cmd
 
-  - plugin: buf.build/connectrpc/es
+  - plugin: protoc-gen-connect-es
     out: gen/ts
     opt:
       - target=ts
+    path: D:/START_UP/zeroZero/node_modules/.bin/protoc-gen-connect-es.cmd

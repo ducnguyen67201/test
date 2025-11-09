@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -23,6 +24,7 @@ import (
 	"github.com/zerozero/apps/api/pkg/config"
 	"github.com/zerozero/apps/api/pkg/logger"
 
+	testGrpc "github.com/zerozero/proto/gen/go/test"
 	userv1 "github.com/zerozero/proto/gen/go/user/v1"
 )
 
@@ -90,10 +92,10 @@ func main() {
 	log.Info("Connected to database")
 
 	// Initialize Clerk auth
-	clerkAuth, err := auth.NewClerkAuth(cfg.Auth.ClerkSecretKey)
-	if err != nil {
-		log.Fatal("Failed to initialize Clerk auth", logger.Error(err))
-	}
+	// clerkAuth, err := auth.NewClerkAuth(cfg.Auth.ClerkSecretKey)
+	// if err != nil {
+	// 	log.Fatal("Failed to initialize Clerk auth", logger.Error(err))
+	// }
 
 	// Initialize repositories
 	userRepo := db.NewUserRepository(dbPool)
@@ -103,23 +105,43 @@ func main() {
 
 	// Create gRPC server with interceptor
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(authUnaryInterceptor(clerkAuth, log)),
+	// grpc.UnaryInterceptor(authUnaryInterceptor(clerkAuth, log)),
 	)
 
 	// Register services
 	userService := grpchandler.NewUserServiceGRPCServer(userUseCase, log)
 	userv1.RegisterUserServiceServer(grpcServer, userService)
 
-	// Create listener
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Server.GRPCPort))
-	if err != nil {
-		log.Fatal("Failed to create listener", logger.Error(err))
+	testUseCase := usecase.NewTestUseCase(log)
+	testService := grpchandler.NewTestServiceGRPCServer(testUseCase)
+	testGrpc.RegisterTestServiceServer(grpcServer, testService)
+
+	// Wrap gRPC server with grpc-web
+	wrappedGrpc := grpcweb.WrapServer(grpcServer,
+		grpcweb.WithCorsForRegisteredEndpointsOnly(false),
+		grpcweb.WithOriginFunc(func(origin string) bool {
+			// Allow all origins for development
+			return true
+		}),
+	)
+
+	// Create HTTP server that handles both gRPC and gRPC-Web
+	httpServer := &http.Server{
+		Addr: fmt.Sprintf(":%d", cfg.Server.GRPCPort),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if wrappedGrpc.IsGrpcWebRequest(r) {
+				wrappedGrpc.ServeHTTP(w, r)
+			} else {
+				// Fall back to standard gRPC
+				grpcServer.ServeHTTP(w, r)
+			}
+		}),
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Info("gRPC server started", logger.Int("port", cfg.Server.GRPCPort))
-		if err := grpcServer.Serve(lis); err != nil {
+		log.Info("gRPC server with gRPC-Web started", logger.Int("port", cfg.Server.GRPCPort))
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Failed to serve gRPC", logger.Error(err))
 		}
 	}()
@@ -130,6 +152,9 @@ func main() {
 	<-quit
 
 	log.Info("Shutting down gRPC server...")
+	if err := httpServer.Shutdown(context.Background()); err != nil {
+		log.Error("Error shutting down HTTP server", logger.Error(err))
+	}
 	grpcServer.GracefulStop()
 	log.Info("gRPC server shutdown complete")
 }
