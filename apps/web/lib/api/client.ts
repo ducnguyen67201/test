@@ -1,5 +1,3 @@
-import { auth } from '@clerk/nextjs/server';
-
 /**
  * API Client configuration
  */
@@ -96,24 +94,6 @@ export async function apiRequest<T = any>(
       0
     );
   }
-}
-
-/**
- * Server-side API request helper that automatically gets the token from Clerk
- * Use this in Server Components or Server Actions
- */
-export async function serverApiRequest<T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const { getToken } = auth();
-  const token = await getToken();
-
-  if (!token) {
-    throw new APIError('Unauthorized: No token available', 401);
-  }
-
-  return apiRequest<T>(endpoint, options, token);
 }
 
 /**

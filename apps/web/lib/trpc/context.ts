@@ -1,8 +1,8 @@
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { type NextRequest } from 'next/server';
 
 export async function createTRPCContext({ req }: { req: NextRequest }) {
-  const session = auth();
+  const session = await auth();
 
   return {
     session,

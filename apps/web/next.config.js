@@ -62,6 +62,9 @@ const nextConfig = {
       },
     ];
   },
+  // Turbopack configuration (Next.js 16+)
+  turbopack: {},
+  // Webpack fallback for compatibility
   webpack: (config) => {
     // Handle protobuf imports
     config.resolve.extensionAlias = {
