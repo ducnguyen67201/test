@@ -12,13 +12,15 @@ import (
 // UserHandler handles HTTP requests for users
 type UserHandler struct {
     userUseCase usecase.UserUseCase
+    clerkAuth   *auth.ClerkAuth
     logger      logger.Logger
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(userUseCase usecase.UserUseCase, logger logger.Logger) *UserHandler {
+func NewUserHandler(userUseCase usecase.UserUseCase, clerkAuth *auth.ClerkAuth, logger logger.Logger) *UserHandler {
     return &UserHandler{
         userUseCase: userUseCase,
+        clerkAuth:   clerkAuth,
         logger:      logger,
     }
 }
@@ -30,6 +32,23 @@ func (h *UserHandler) GetMe(c *gin.Context) {
     if err != nil {
         h.handleError(c, err)
         return
+    }
+
+    // If email is missing from JWT claims, fetch full user data from Clerk API
+    if authUser.Email == "" {
+        h.logger.Debug("Email missing from JWT, fetching from Clerk API",
+            logger.String("clerk_id", authUser.ClerkID),
+        )
+        fullUser, err := h.clerkAuth.GetUser(c.Request.Context(), authUser.ClerkID)
+        if err != nil {
+            h.logger.Error("Failed to fetch user from Clerk API",
+                logger.Error(err),
+                logger.String("clerk_id", authUser.ClerkID),
+            )
+            h.handleError(c, errors.NewInternal("Failed to fetch user details"))
+            return
+        }
+        authUser = fullUser
     }
 
     // Get or create user

@@ -32,7 +32,7 @@ func healthCheckHandler(c *gin.Context) {
 
 // registerUserRoutes sets up user-related routes
 func registerUserRoutes(api *gin.RouterGroup, deps *Dependencies) {
-	userHandler := httphandler.NewUserHandler(deps.UserUseCase, deps.Logger)
+	userHandler := httphandler.NewUserHandler(deps.UserUseCase, deps.ClerkAuth, deps.Logger)
 	api.GET("/me", userHandler.GetMe)
 	api.PATCH("/me", userHandler.UpdateProfile)
 }
