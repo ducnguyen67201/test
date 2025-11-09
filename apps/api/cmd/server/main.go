@@ -41,7 +41,7 @@ func main() {
 	defer dbPool.Close()
 
 	// Initialize Clerk auth
-	clerkAuth, err := auth.NewClerkAuth(cfg.Auth.ClerkSecretKey)
+	clerkAuth, err := auth.NewClerkAuth(cfg.Auth.ClerkSecretKey, cfg.Auth.ClerkJWKSURL, appLogger)
 	if err != nil {
 		appLogger.Fatal("Failed to initialize Clerk auth", logger.Error(err))
 	}

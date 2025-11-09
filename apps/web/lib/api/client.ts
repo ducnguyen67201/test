@@ -42,10 +42,18 @@ export async function apiRequest<T = any>(
 
   const url = `${API_BASE_URL}${endpoint}`;
 
-  const headers: HeadersInit = {
+  // Build headers object with proper typing
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
   };
+
+  // Merge existing headers from options
+  if (options.headers) {
+    const existingHeaders = new Headers(options.headers);
+    existingHeaders.forEach((value, key) => {
+      headers[key] = value;
+    });
+  }
 
   // Add authorization header if token is provided
   if (authToken) {

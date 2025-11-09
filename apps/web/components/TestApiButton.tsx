@@ -1,19 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { useApiGet } from '@/lib/api';
 import type { UserProfile } from '@/types';
 
 export function TestApiButton() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   const { get, loading, error } = useApiGet<UserProfile>();
+  const { getToken } = useAuth();
 
   const handleGetProfile = async () => {
     setErrorMessage(null);
     setProfile(null);
+    setDebugInfo(null);
 
     try {
+      // Get and log the token for debugging
+      const token = await getToken();
       const data = await get('/api/me');
       setProfile(data);
     } catch (err) {

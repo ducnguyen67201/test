@@ -2,7 +2,6 @@
 
 import { useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
 import { ProfileSync } from '@/components/ProfileSync';
-import { TestGrpcButton } from '@/components/TestGrpcButton';
 import { TestApiButton } from '@/components/TestApiButton';
 
 export default function HomePage() {
@@ -49,9 +48,7 @@ export default function HomePage() {
               <h2 className="text-2xl font-bold mb-4">Profile Management</h2>
               <ProfileSync />
             </div>
-
-            <TestGrpcButton />
-
+            
             <TestApiButton />
 
             <div className="card">

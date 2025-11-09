@@ -37,8 +37,9 @@ type RedisConfig struct {
 
 // AuthConfig holds authentication configuration
 type AuthConfig struct {
-    ClerkSecretKey    string
+    ClerkSecretKey     string
     ClerkWebhookSecret string
+    ClerkJWKSURL       string
 }
 
 // ServerConfig holds server configuration
@@ -68,8 +69,9 @@ func Load() (*Config, error) {
             URL: getEnv("REDIS_URL", "redis://localhost:6379"),
         },
         Auth: AuthConfig{
-            ClerkSecretKey:    getEnv("CLERK_SECRET_KEY", ""),
+            ClerkSecretKey:     getEnv("CLERK_SECRET_KEY", ""),
             ClerkWebhookSecret: getEnv("CLERK_WEBHOOK_SECRET", ""),
+            ClerkJWKSURL:       getEnv("CLERK_JWKS_URL", "https://teaching-camel-82.clerk.accounts.dev/.well-known/jwks.json"),
         },
         Server: ServerConfig{
             Port:         getEnvInt("API_PORT", 8080),
