@@ -1,8 +1,10 @@
 'use client';
 
-import { useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
+import { useUser, SignInButton } from '@clerk/nextjs';
+import { DashboardLayout } from '@/components/dashboard-layout';
 import { ProfileSync } from '@/components/ProfileSync';
 import { TestApiButton } from '@/components/TestApiButton';
+import { Button } from '@/components/ui/button';
 
 export default function HomePage() {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -10,88 +12,77 @@ export default function HomePage() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md w-full mx-4">
+          <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-8 text-center">
+            <h2 className="text-3xl font-bold mb-4">Welcome to ZeroZero</h2>
+            <p className="text-muted-foreground mb-6">
+              A production-ready monorepo demonstrating Clean Architecture,
+              type-safe APIs, and modern authentication.
+            </p>
+            <SignInButton mode="modal">
+              <Button size="lg" className="w-full">
+                Get Started
+              </Button>
+            </SignInButton>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <h1 className="text-2xl font-bold text-primary-600">ZeroZero</h1>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Welcome back, {user.firstName || 'User'}!
+          </h2>
+          <p className="text-muted-foreground">
+            Here's what's happening with your projects today.
+          </p>
+        </div>
+
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+          <h3 className="text-xl font-semibold mb-4">Profile Management</h3>
+          <ProfileSync />
+        </div>
+
+        <TestApiButton />
+
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+          <h3 className="text-xl font-semibold mb-4">System Architecture</h3>
+          <div className="grid md:grid-cols-2 gap-6">
             <div>
-              {isSignedIn ? (
-                <div className="flex items-center space-x-4">
-                  <span className="text-gray-700">
-                    Welcome, {user.firstName || user.emailAddresses[0].emailAddress}!
-                  </span>
-                  <SignOutButton>
-                    <button className="btn-secondary">Sign Out</button>
-                  </SignOutButton>
-                </div>
-              ) : (
-                <SignInButton mode="modal">
-                  <button className="btn-primary">Sign In</button>
-                </SignInButton>
-              )}
+              <h4 className="font-semibold text-primary mb-3">Backend (Go)</h4>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li>• Clean Architecture with DDD</li>
+                <li>• Connect gRPC server</li>
+                <li>• Gin HTTP framework</li>
+                <li>• PostgreSQL with sqlc</li>
+                <li>• Clerk JWT authentication</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-primary mb-3">Frontend (Next.js)</h4>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li>• App Router with Server Components</li>
+                <li>• tRPC for type-safe APIs</li>
+                <li>• Connect-Web gRPC client</li>
+                <li>• Clerk authentication</li>
+                <li>• Tailwind CSS styling</li>
+              </ul>
             </div>
           </div>
         </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {isSignedIn ? (
-          <div className="space-y-8">
-            <div className="card">
-              <h2 className="text-2xl font-bold mb-4">Profile Management</h2>
-              <ProfileSync />
-            </div>
-            
-            <TestApiButton />
-
-            <div className="card">
-              <h2 className="text-xl font-semibold mb-4">System Architecture</h2>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="font-semibold text-primary-600 mb-2">Backend (Go)</h3>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• Clean Architecture with DDD</li>
-                    <li>• Connect gRPC server</li>
-                    <li>• Gin HTTP framework</li>
-                    <li>• PostgreSQL with sqlc</li>
-                    <li>• Clerk JWT authentication</li>
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-primary-600 mb-2">Frontend (Next.js)</h3>
-                  <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• App Router with Server Components</li>
-                    <li>• tRPC for type-safe APIs</li>
-                    <li>• Connect-Web gRPC client</li>
-                    <li>• Clerk authentication</li>
-                    <li>• Tailwind CSS styling</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="card text-center">
-            <h2 className="text-3xl font-bold mb-4">Welcome to ZeroZero</h2>
-            <p className="text-gray-600 mb-6">
-              A production-ready monorepo demonstrating Clean Architecture,
-              type-safe APIs, and modern authentication.
-            </p>
-            <SignInButton mode="modal">
-              <button className="btn-primary text-lg px-8 py-3">
-                Get Started
-              </button>
-            </SignInButton>
-          </div>
-        )}
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
