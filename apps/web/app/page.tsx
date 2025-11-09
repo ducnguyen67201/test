@@ -3,6 +3,7 @@
 import { useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
 import { ProfileSync } from '@/components/ProfileSync';
 import { TestGrpcButton } from '@/components/TestGrpcButton';
+import { TestApiButton } from '@/components/TestApiButton';
 
 export default function HomePage() {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -50,6 +51,8 @@ export default function HomePage() {
             </div>
 
             <TestGrpcButton />
+
+            <TestApiButton />
 
             <div className="card">
               <h2 className="text-xl font-semibold mb-4">System Architecture</h2>
