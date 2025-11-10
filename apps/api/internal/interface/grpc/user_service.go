@@ -14,14 +14,14 @@ import (
 // UserServiceServer implements the UserService gRPC service
 type UserServiceServer struct {
     userUseCase usecase.UserUseCase
-    logger      logger.Logger
+    log         logger.Logger
 }
 
 // NewUserServiceServer creates a new user service server
 func NewUserServiceServer(userUseCase usecase.UserUseCase, logger logger.Logger) *UserServiceServer {
     return &UserServiceServer{
         userUseCase: userUseCase,
-        logger:      logger,
+        log:         logger,
     }
 }
 
@@ -46,7 +46,7 @@ func (s *UserServiceServer) GetOrCreateMe(
         authUser.AvatarURL,
     )
     if err != nil {
-        s.logger.Error("Failed to get or create user", logger.Error(err))
+        s.log.Error("Failed to get or create user", logger.Error(err))
         return nil, s.handleError(err)
     }
 
@@ -88,7 +88,7 @@ func (s *UserServiceServer) UpdateProfile(
         req.Msg.AvatarUrl,
     )
     if err != nil {
-        s.logger.Error("Failed to update profile", logger.Error(err))
+        s.log.Error("Failed to update profile", logger.Error(err))
         return nil, s.handleError(err)
     }
 

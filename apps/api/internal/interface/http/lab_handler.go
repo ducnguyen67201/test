@@ -15,7 +15,7 @@ type LabHandler struct {
 	labUseCase  usecase.LabUseCase
 	userUseCase usecase.UserUseCase
 	clerkAuth   *auth.ClerkAuth
-	logger      logger.Logger
+	log         logger.Logger
 }
 
 // NewLabHandler creates a new lab handler
@@ -29,7 +29,7 @@ func NewLabHandler(
 		labUseCase:  labUseCase,
 		userUseCase: userUseCase,
 		clerkAuth:   clerkAuth,
-		logger:      logger,
+		log:         logger,
 	}
 }
 
@@ -333,7 +333,7 @@ func (h *LabHandler) handleError(c *gin.Context, err error) {
 	}
 
 	// Default to internal server error
-	h.logger.Error("Unhandled error", logger.Error(err))
+	h.log.Error("Unhandled error", logger.Error(err))
 	c.JSON(http.StatusInternalServerError, gin.H{
 		"error": gin.H{
 			"code":    "INTERNAL_ERROR",

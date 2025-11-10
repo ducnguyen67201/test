@@ -27,14 +27,14 @@ type UserUseCase interface {
 // userUseCase is the concrete implementation
 type userUseCase struct {
     userRepo repository.UserRepository
-    logger   logger.Logger
+    log      logger.Logger
 }
 
 // NewUserUseCase creates a new user use case
 func NewUserUseCase(userRepo repository.UserRepository, logger logger.Logger) UserUseCase {
     return &userUseCase{
         userRepo: userRepo,
-        logger:   logger,
+        log:      logger,
     }
 }
 
@@ -60,7 +60,7 @@ func (uc *userUseCase) GetOrCreateUser(ctx context.Context, clerkID, email, firs
 
             updatedUser, err := uc.userRepo.Update(ctx, existingUser)
             if err != nil {
-                uc.logger.Error("Failed to update user", logger.Error(err))
+                uc.log.Error("Failed to update user", logger.Error(err))
                 return nil, false, errors.NewInternal("Failed to update user").WithError(err)
             }
             return updatedUser, false, nil
@@ -85,11 +85,11 @@ func (uc *userUseCase) GetOrCreateUser(ctx context.Context, clerkID, email, firs
 
     createdUser, err := uc.userRepo.Create(ctx, newUser)
     if err != nil {
-        uc.logger.Error("Failed to create user", logger.Error(err))
+        uc.log.Error("Failed to create user", logger.Error(err))
         return nil, false, errors.NewInternal("Failed to create user").WithError(err)
     }
 
-    uc.logger.Info("Created new user", logger.String("user_id", createdUser.ID), logger.String("clerk_id", clerkID))
+    uc.log.Info("Created new user", logger.String("user_id", createdUser.ID), logger.String("clerk_id", clerkID))
     return createdUser, true, nil
 }
 
@@ -101,7 +101,7 @@ func (uc *userUseCase) UpdateProfile(ctx context.Context, clerkID, firstName, la
         if errors.IsNotFound(err) {
             return nil, errors.NewNotFound("User")
         }
-        uc.logger.Error("Failed to get user", logger.Error(err))
+        uc.log.Error("Failed to get user", logger.Error(err))
         return nil, errors.NewInternal("Failed to get user").WithError(err)
     }
 
@@ -119,11 +119,11 @@ func (uc *userUseCase) UpdateProfile(ctx context.Context, clerkID, firstName, la
     // Update in database
     updatedUser, err := uc.userRepo.Update(ctx, user)
     if err != nil {
-        uc.logger.Error("Failed to update user profile", logger.Error(err))
+        uc.log.Error("Failed to update user profile", logger.Error(err))
         return nil, errors.NewInternal("Failed to update profile").WithError(err)
     }
 
-    uc.logger.Info("Updated user profile", logger.String("user_id", updatedUser.ID))
+    uc.log.Info("Updated user profile", logger.String("user_id", updatedUser.ID))
     return updatedUser, nil
 }
 
@@ -134,7 +134,7 @@ func (uc *userUseCase) GetUserByClerkID(ctx context.Context, clerkID string) (*e
         if errors.IsNotFound(err) {
             return nil, errors.NewNotFound("User")
         }
-        uc.logger.Error("Failed to get user by Clerk ID", logger.Error(err))
+        uc.log.Error("Failed to get user by Clerk ID", logger.Error(err))
         return nil, errors.NewInternal("Failed to get user").WithError(err)
     }
 
@@ -152,7 +152,7 @@ func (uc *userUseCase) GetUserByID(ctx context.Context, id string) (*entity.User
         if errors.IsNotFound(err) {
             return nil, errors.NewNotFound(fmt.Sprintf("User with ID %s", id))
         }
-        uc.logger.Error("Failed to get user by ID", logger.Error(err))
+        uc.log.Error("Failed to get user by ID", logger.Error(err))
         return nil, errors.NewInternal("Failed to get user").WithError(err)
     }
 

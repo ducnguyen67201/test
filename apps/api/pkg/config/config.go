@@ -13,6 +13,7 @@ type Config struct {
     Redis    RedisConfig
     Auth     AuthConfig
     Server   ServerConfig
+    Temporal TemporalConfig
 }
 
 // AppConfig holds application-specific configuration
@@ -51,6 +52,14 @@ type ServerConfig struct {
     WriteTimeout int
 }
 
+// TemporalConfig holds Temporal workflow configuration
+type TemporalConfig struct {
+    Address       string
+    Namespace     string
+    LabsTaskQueue string
+    Enabled       bool
+}
+
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
     config := &Config{
@@ -79,6 +88,12 @@ func Load() (*Config, error) {
             CorsOrigins:  strings.Split(getEnv("API_CORS_ORIGINS", "http://localhost:3000"), ","),
             ReadTimeout:  getEnvInt("SERVER_READ_TIMEOUT", 10),
             WriteTimeout: getEnvInt("SERVER_WRITE_TIMEOUT", 10),
+        },
+        Temporal: TemporalConfig{
+            Address:       getEnv("TEMPORAL_ADDRESS", "localhost:7233"),
+            Namespace:     getEnv("TEMPORAL_NAMESPACE", "zerozero-dev"),
+            LabsTaskQueue: getEnv("TEMPORAL_LABS_TASK_QUEUE", "labs.provisioning.v1"),
+            Enabled:       getEnvBool("TEMPORAL_ENABLED", false),
         },
     }
 

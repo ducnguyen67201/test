@@ -17,6 +17,7 @@ import (
 	"github.com/zerozero/apps/api/internal/router"
 	"github.com/zerozero/apps/api/internal/usecase"
 	"github.com/zerozero/apps/api/pkg/logger"
+	"go.temporal.io/sdk/client"
 )
 
 func main() {
@@ -53,6 +54,24 @@ func main() {
 		appLogger.Fatal("Failed to initialize Clerk auth", logger.Error(err))
 	}
 
+	// Create Temporal client (if enabled)
+	var temporalClient client.Client
+	if cfg.Temporal.Enabled {
+		temporalClient, err = client.Dial(client.Options{
+			HostPort:  cfg.Temporal.Address,
+			Namespace: cfg.Temporal.Namespace,
+		})
+		if err != nil {
+			appLogger.Fatal("Failed to create Temporal client", logger.Error(err))
+		}
+		defer temporalClient.Close()
+		appLogger.Info("Temporal client connected",
+			logger.String("address", cfg.Temporal.Address),
+			logger.String("namespace", cfg.Temporal.Namespace))
+	} else {
+		appLogger.Info("Temporal integration disabled")
+	}
+
 	// Initialize repositories with GORM
 	userRepo := db.NewUserRepository(gormDB)
 	labRepo := db.NewLabRepository(gormDB)
@@ -62,7 +81,7 @@ func main() {
 
 	// Initialize use cases
 	userUseCase := usecase.NewUserUseCase(userRepo, appLogger)
-	labUseCase := usecase.NewLabUseCase(labRepo, userRepo, blueprintService, appLogger)
+	labUseCase := usecase.NewLabUseCase(labRepo, userRepo, blueprintService, temporalClient, cfg, appLogger)
 
 	// Setup router with all dependencies
 	deps := &router.Dependencies{

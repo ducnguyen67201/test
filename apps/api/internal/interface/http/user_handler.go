@@ -13,7 +13,7 @@ import (
 type UserHandler struct {
     userUseCase usecase.UserUseCase
     clerkAuth   *auth.ClerkAuth
-    logger      logger.Logger
+    log         logger.Logger
 }
 
 // NewUserHandler creates a new user handler
@@ -21,7 +21,7 @@ func NewUserHandler(userUseCase usecase.UserUseCase, clerkAuth *auth.ClerkAuth, 
     return &UserHandler{
         userUseCase: userUseCase,
         clerkAuth:   clerkAuth,
-        logger:      logger,
+        log:         logger,
     }
 }
 
@@ -36,12 +36,12 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 
     // If email is missing from JWT claims, fetch full user data from Clerk API
     if authUser.Email == "" {
-        h.logger.Debug("Email missing from JWT, fetching from Clerk API",
+        h.log.Debug("Email missing from JWT, fetching from Clerk API",
             logger.String("clerk_id", authUser.ClerkID),
         )
         fullUser, err := h.clerkAuth.GetUser(c.Request.Context(), authUser.ClerkID)
         if err != nil {
-            h.logger.Error("Failed to fetch user from Clerk API",
+            h.log.Error("Failed to fetch user from Clerk API",
                 logger.Error(err),
                 logger.String("clerk_id", authUser.ClerkID),
             )
@@ -144,7 +144,7 @@ func (h *UserHandler) handleError(c *gin.Context, err error) {
     }
 
     // Default to internal server error
-    h.logger.Error("Unhandled error", logger.Error(err))
+    h.log.Error("Unhandled error", logger.Error(err))
     c.JSON(http.StatusInternalServerError, gin.H{
         "error": gin.H{
             "code":    "INTERNAL_ERROR",

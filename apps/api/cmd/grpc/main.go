@@ -17,13 +17,16 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/zerozero/apps/api/internal/app"
 	"github.com/zerozero/apps/api/internal/infrastructure/auth"
 	"github.com/zerozero/apps/api/internal/infrastructure/db"
+	infraServices "github.com/zerozero/apps/api/internal/infrastructure/services"
 	grpchandler "github.com/zerozero/apps/api/internal/interface/grpc"
 	"github.com/zerozero/apps/api/internal/usecase"
 	"github.com/zerozero/apps/api/pkg/config"
 	"github.com/zerozero/apps/api/pkg/logger"
 
+	labsv1 "github.com/zerozero/proto/gen/go/labs/v1"
 	testGrpc "github.com/zerozero/proto/gen/go/test"
 	userv1 "github.com/zerozero/proto/gen/go/user/v1"
 )
@@ -54,18 +57,8 @@ func getRootDir() string {
 }
 
 func main() {
-	// Load environment variables from root directory using absolute path
-	rootDir := getRootDir()
-	envPath := filepath.Join(rootDir, ".env.local")
-
-	if err := godotenv.Load(envPath); err != nil {
-		log.Printf("Warning: .env.local file not found at: %s", envPath)
-	} else {
-		log.Printf("Loaded environment from: %s", envPath)
-	}
-
-	// Load configuration
-	cfg, err := config.Load()
+	// Load configuration (includes .env.local loading)
+	cfg, err := app.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
@@ -75,21 +68,15 @@ func main() {
 	if cfg.App.Debug {
 		logLevel = "debug"
 	}
-	log := logger.New(logLevel)
-	log.Info("Starting gRPC server", logger.String("environment", cfg.App.Environment))
+	appLogger := logger.New(logLevel)
+	appLogger.Info("Starting gRPC server", logger.String("environment", cfg.App.Environment))
 
 	// Connect to database
-	dbPool, err := pgxpool.New(context.Background(), cfg.Database.URL)
+	dbPool, err := app.ConnectDatabase(cfg, appLogger)
 	if err != nil {
-		log.Fatal("Failed to connect to database", logger.Error(err))
+		appLogger.Fatal("Failed to connect to database", logger.Error(err))
 	}
 	defer dbPool.Close()
-
-	// Ping database
-	if err := dbPool.Ping(context.Background()); err != nil {
-		log.Fatal("Failed to ping database", logger.Error(err))
-	}
-	log.Info("Connected to database")
 
 	// Initialize Clerk auth
 	// clerkAuth, err := auth.NewClerkAuth(cfg.Auth.ClerkSecretKey)
@@ -97,11 +84,22 @@ func main() {
 	// 	log.Fatal("Failed to initialize Clerk auth", logger.Error(err))
 	// }
 
+	// Connect to database with GORM (needed for labs)
+	gormDB, err := app.ConnectGORMDatabase(cfg, appLogger)
+	if err != nil {
+		appLogger.Fatal("Failed to connect to database with GORM", logger.Error(err))
+	}
+
 	// Initialize repositories
 	userRepo := db.NewUserRepository(dbPool)
+	labRepo := db.NewLabRepository(gormDB)
+
+	// Initialize services
+	blueprintService := infraServices.NewMockBlueprintService(appLogger)
 
 	// Initialize use cases
-	userUseCase := usecase.NewUserUseCase(userRepo, log)
+	userUseCase := usecase.NewUserUseCase(userRepo, appLogger)
+	labUseCase := usecase.NewLabUseCase(labRepo, userRepo, blueprintService, appLogger)
 
 	// Create gRPC server with interceptor
 	grpcServer := grpc.NewServer(
@@ -109,12 +107,16 @@ func main() {
 	)
 
 	// Register services
-	userService := grpchandler.NewUserServiceGRPCServer(userUseCase, log)
+	userService := grpchandler.NewUserServiceGRPCServer(userUseCase, appLogger)
 	userv1.RegisterUserServiceServer(grpcServer, userService)
 
-	testUseCase := usecase.NewTestUseCase(log)
+	testUseCase := usecase.NewTestUseCase(appLogger)
 	testService := grpchandler.NewTestServiceGRPCServer(testUseCase)
 	testGrpc.RegisterTestServiceServer(grpcServer, testService)
+
+	// Register Labs service (for Temporal activities)
+	labsService := grpchandler.NewLabsServiceGRPCServer(labUseCase, labRepo, blueprintService, appLogger)
+	labsv1.RegisterLabsServiceServer(grpcServer, labsService)
 
 	// Wrap gRPC server with grpc-web
 	wrappedGrpc := grpcweb.WrapServer(grpcServer,
@@ -140,9 +142,9 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Info("gRPC server with gRPC-Web started", logger.Int("port", cfg.Server.GRPCPort))
+		appLogger.Info("gRPC server with gRPC-Web started", logger.Int("port", cfg.Server.GRPCPort))
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("Failed to serve gRPC", logger.Error(err))
+			appLogger.Fatal("Failed to serve gRPC", logger.Error(err))
 		}
 	}()
 
@@ -151,12 +153,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Info("Shutting down gRPC server...")
+	appLogger.Info("Shutting down gRPC server...")
 	if err := httpServer.Shutdown(context.Background()); err != nil {
-		log.Error("Error shutting down HTTP server", logger.Error(err))
+		appLogger.Error("Error shutting down HTTP server", logger.Error(err))
 	}
 	grpcServer.GracefulStop()
-	log.Info("gRPC server shutdown complete")
+	appLogger.Info("gRPC server shutdown complete")
 }
 
 // authUnaryInterceptor is a gRPC interceptor for authentication

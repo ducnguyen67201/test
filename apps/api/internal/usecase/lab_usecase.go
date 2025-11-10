@@ -10,8 +10,10 @@ import (
 	"github.com/zerozero/apps/api/internal/domain/entity"
 	"github.com/zerozero/apps/api/internal/domain/repository"
 	"github.com/zerozero/apps/api/internal/infrastructure/services"
+	"github.com/zerozero/apps/api/pkg/config"
 	"github.com/zerozero/apps/api/pkg/errors"
 	"github.com/zerozero/apps/api/pkg/logger"
+	"go.temporal.io/sdk/client"
 )
 
 // LabUseCase handles lab request business logic
@@ -46,7 +48,9 @@ type labUseCase struct {
 	labRepo          repository.LabRepository
 	userRepo         repository.UserRepository
 	blueprintService services.BlueprintService
-	logger           logger.Logger
+	temporalClient   client.Client
+	cfg              *config.Config
+	log              logger.Logger
 }
 
 // NewLabUseCase creates a new lab use case
@@ -54,13 +58,17 @@ func NewLabUseCase(
 	labRepo repository.LabRepository,
 	userRepo repository.UserRepository,
 	blueprintService services.BlueprintService,
+	temporalClient client.Client,
+	cfg *config.Config,
 	logger logger.Logger,
 ) LabUseCase {
 	return &labUseCase{
 		labRepo:          labRepo,
 		userRepo:         userRepo,
 		blueprintService: blueprintService,
-		logger:           logger,
+		temporalClient:   temporalClient,
+		cfg:              cfg,
+		log:              logger,
 	}
 }
 
@@ -87,14 +95,14 @@ func (uc *labUseCase) GetContext(ctx context.Context, userID string, userRole en
 	// Get quick picks (recent CVEs)
 	quickPicks, err := uc.labRepo.GetRecentCVEs(ctx, 10)
 	if err != nil {
-		uc.logger.Error("Failed to get recent CVEs", logger.Error(err))
+		uc.log.Error("Failed to get recent CVEs", logger.Error(err))
 		return nil, errors.NewInternal("Failed to load quick picks").WithError(err)
 	}
 
 	// Get active labs for user
 	activeLabs, err := uc.labRepo.GetActiveByUserID(ctx, userID)
 	if err != nil {
-		uc.logger.Error("Failed to get active labs", logger.Error(err))
+		uc.log.Error("Failed to get active labs", logger.Error(err))
 		return nil, errors.NewInternal("Failed to check active labs").WithError(err)
 	}
 
@@ -130,7 +138,7 @@ func (uc *labUseCase) CreateDraft(ctx context.Context, userID string, input *Cre
 	if input.Source == entity.LabSourceQuickPick && input.CVEID != "" {
 		cve, err := uc.labRepo.GetCVEByID(ctx, input.CVEID)
 		if err != nil {
-			uc.logger.Warn("CVE not found", logger.String("cve_id", input.CVEID))
+			uc.log.Warn("CVE not found", logger.String("cve_id", input.CVEID))
 			// Continue anyway - treat as manual if CVE not found
 			input.Source = entity.LabSourceManual
 		} else {
@@ -168,11 +176,11 @@ func (uc *labUseCase) CreateDraft(ctx context.Context, userID string, input *Cre
 	// Create in database
 	created, err := uc.labRepo.Create(ctx, labRequest)
 	if err != nil {
-		uc.logger.Error("Failed to create lab request", logger.Error(err))
+		uc.log.Error("Failed to create lab request", logger.Error(err))
 		return nil, errors.NewInternal("Failed to create lab request").WithError(err)
 	}
 
-	uc.logger.Info("Created draft lab request",
+	uc.log.Info("Created draft lab request",
 		logger.String("lab_id", created.ID),
 		logger.String("user_id", userID),
 		logger.String("severity", created.Severity.String()))
@@ -191,7 +199,7 @@ func (uc *labUseCase) GenerateBlueprint(ctx context.Context, labID string) (*ent
 	// Generate blueprint using service
 	blueprint, err := uc.blueprintService.GenerateBlueprint(ctx, labRequest)
 	if err != nil {
-		uc.logger.Error("Failed to generate blueprint",
+		uc.log.Error("Failed to generate blueprint",
 			logger.String("lab_id", labID),
 			logger.Error(err))
 		return nil, errors.NewInternal("Failed to generate blueprint").WithError(err)
@@ -200,7 +208,7 @@ func (uc *labUseCase) GenerateBlueprint(ctx context.Context, labID string) (*ent
 	// Serialize blueprint to JSON
 	blueprintJSON, err := services.SerializeBlueprint(blueprint)
 	if err != nil {
-		uc.logger.Error("Failed to serialize blueprint", logger.Error(err))
+		uc.log.Error("Failed to serialize blueprint", logger.Error(err))
 		return nil, errors.NewInternal("Failed to serialize blueprint").WithError(err)
 	}
 
@@ -210,11 +218,11 @@ func (uc *labUseCase) GenerateBlueprint(ctx context.Context, labID string) (*ent
 
 	updated, err := uc.labRepo.Update(ctx, labRequest)
 	if err != nil {
-		uc.logger.Error("Failed to update lab request with blueprint", logger.Error(err))
+		uc.log.Error("Failed to update lab request with blueprint", logger.Error(err))
 		return nil, errors.NewInternal("Failed to save blueprint").WithError(err)
 	}
 
-	uc.logger.Info("Generated blueprint for lab",
+	uc.log.Info("Generated blueprint for lab",
 		logger.String("lab_id", labID))
 
 	return updated, nil
@@ -247,7 +255,7 @@ func (uc *labUseCase) ConfirmRequest(ctx context.Context, labID string, userRole
 		labRequest.GuardrailSnapshot = guardrailJSON
 		uc.labRepo.Update(ctx, labRequest)
 
-		uc.logger.Warn("Lab request rejected by guardrails",
+		uc.log.Warn("Lab request rejected by guardrails",
 			logger.String("lab_id", labID),
 			logger.String("reasons", strings.Join(blockingReasons, "; ")))
 
@@ -264,7 +272,7 @@ func (uc *labUseCase) ConfirmRequest(ctx context.Context, labID string, userRole
 	// Save guardrail snapshot
 	guardrailJSON, err := json.Marshal(guardrails)
 	if err != nil {
-		uc.logger.Error("Failed to serialize guardrails", logger.Error(err))
+		uc.log.Error("Failed to serialize guardrails", logger.Error(err))
 	} else {
 		labRequest.GuardrailSnapshot = guardrailJSON
 	}
@@ -272,16 +280,59 @@ func (uc *labUseCase) ConfirmRequest(ctx context.Context, labID string, userRole
 	// Update in database
 	updated, err := uc.labRepo.Update(ctx, labRequest)
 	if err != nil {
-		uc.logger.Error("Failed to confirm lab request", logger.Error(err))
+		uc.log.Error("Failed to confirm lab request", logger.Error(err))
 		return nil, errors.NewInternal("Failed to confirm lab request").WithError(err)
 	}
 
-	uc.logger.Info("Lab request confirmed and queued",
+	uc.log.Info("Lab request confirmed and queued",
 		logger.String("lab_id", labID),
 		logger.String("expires_at", expiresAt.Format(time.RFC3339)))
 
-	// TODO: Emit event for provisioner to pick up
-	// For MVP, lab remains in "queued" status
+	// Start Temporal workflow (if enabled)
+	if uc.cfg.Temporal.Enabled && uc.temporalClient != nil {
+		workflowID := fmt.Sprintf("lab-%s", updated.ID)
+
+		// Define workflow parameters (using type from lab workflow package)
+		workflowParams := map[string]interface{}{
+			"LabID":          updated.ID,
+			"RequestedBy":    updated.UserID,
+			"CVEID":          updated.CVEID,
+			"Severity":       string(updated.Severity),
+			"TTLHours":       updated.TTLHours,
+			"RequiresReview": updated.Severity == entity.LabSeverityCritical || updated.Severity == entity.LabSeverityHigh,
+		}
+
+		run, err := uc.temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+			ID:        workflowID,
+			TaskQueue: uc.cfg.Temporal.LabsTaskQueue,
+		}, "LabProvisionWorkflow", workflowParams)
+
+		if err != nil {
+			uc.log.Error("Failed to start Temporal workflow",
+				logger.String("lab_id", updated.ID),
+				logger.Error(err))
+			// Don't fail the request - lab is queued, workflow can be retried
+		} else {
+			// Store workflow IDs
+			wfID := run.GetID()
+			runID := run.GetRunID()
+			updated.WorkflowID = &wfID
+			updated.RunID = &runID
+
+			// Update lab with workflow IDs
+			updated, err = uc.labRepo.Update(ctx, updated)
+			if err != nil {
+				uc.log.Error("Failed to store workflow IDs",
+					logger.String("lab_id", updated.ID),
+					logger.Error(err))
+			} else {
+				uc.log.Info("Temporal workflow started",
+					logger.String("lab_id", updated.ID),
+					logger.String("workflow_id", wfID),
+					logger.String("run_id", runID))
+			}
+		}
+	}
 
 	return updated, nil
 }
@@ -305,7 +356,7 @@ func (uc *labUseCase) validateGuardrails(
 	// Check 1: Active lab limit (≤1 active lab per user)
 	activeCount, err := uc.labRepo.CountActiveByUserID(ctx, userID)
 	if err != nil {
-		uc.logger.Error("Failed to count active labs", logger.Error(err))
+		uc.log.Error("Failed to count active labs", logger.Error(err))
 		snapshot.Checks = append(snapshot.Checks, entity.GuardrailCheck{
 			Name:     "Active Lab Limit",
 			Passed:   false,
@@ -431,15 +482,31 @@ func (uc *labUseCase) CancelLab(ctx context.Context, labID string, userID string
 		return errors.NewBadRequest("Can only cancel queued or running labs")
 	}
 
+	// Send cancel signal to Temporal workflow (if running)
+	if uc.cfg.Temporal.Enabled && uc.temporalClient != nil && lab.WorkflowID != nil && lab.RunID != nil {
+		err = uc.temporalClient.SignalWorkflow(ctx, *lab.WorkflowID, *lab.RunID, "cancel-lab", nil)
+		if err != nil {
+			uc.log.Error("Failed to signal Temporal workflow",
+				logger.String("lab_id", labID),
+				logger.String("workflow_id", *lab.WorkflowID),
+				logger.Error(err))
+			// Continue anyway - still update lab status
+		} else {
+			uc.log.Info("Sent cancel signal to Temporal workflow",
+				logger.String("lab_id", labID),
+				logger.String("workflow_id", *lab.WorkflowID))
+		}
+	}
+
 	// Update status
 	lab.Status = entity.LabStatusCompleted
 	_, err = uc.labRepo.Update(ctx, lab)
 	if err != nil {
-		uc.logger.Error("Failed to cancel lab", logger.Error(err))
+		uc.log.Error("Failed to cancel lab", logger.Error(err))
 		return errors.NewInternal("Failed to cancel lab").WithError(err)
 	}
 
-	uc.logger.Info("Lab cancelled", logger.String("lab_id", labID))
+	uc.log.Info("Lab cancelled", logger.String("lab_id", labID))
 	return nil
 }
 
@@ -447,12 +514,12 @@ func (uc *labUseCase) CancelLab(ctx context.Context, labID string, userID string
 func (uc *labUseCase) UpdateExpiredLabs(ctx context.Context) (int64, error) {
 	count, err := uc.labRepo.UpdateExpiredLabs(ctx)
 	if err != nil {
-		uc.logger.Error("Failed to update expired labs", logger.Error(err))
+		uc.log.Error("Failed to update expired labs", logger.Error(err))
 		return 0, errors.NewInternal("Failed to update expired labs").WithError(err)
 	}
 
 	if count > 0 {
-		uc.logger.Info("Updated expired labs", logger.Int("count", int(count)))
+		uc.log.Info("Updated expired labs", logger.Int("count", int(count)))
 	}
 
 	return count, nil

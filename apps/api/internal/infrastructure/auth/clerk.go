@@ -29,7 +29,7 @@ type ClerkAuth struct {
     jwkSet    jwk.Set
     jwkMutex  sync.RWMutex
     lastFetch time.Time
-    logger    logger.Logger
+    log       logger.Logger
 }
 
 // NewClerkAuth creates a new Clerk auth handler
@@ -46,7 +46,7 @@ func NewClerkAuth(secretKey string, jwksURL string, log logger.Logger) (*ClerkAu
 
     return &ClerkAuth{
         jwksURL: jwksURL,
-        logger:  log,
+        log:     log,
     }, nil
 }
 
@@ -98,7 +98,7 @@ func (ca *ClerkAuth) getJWKSet() (jwk.Set, error) {
 
     ca.jwkSet = set
     ca.lastFetch = time.Now()
-    ca.logger.Debug("JWK set refreshed from Clerk")
+    ca.log.Debug("JWK set refreshed from Clerk")
 
     return ca.jwkSet, nil
 }
@@ -222,7 +222,7 @@ func (ca *ClerkAuth) Middleware() gin.HandlerFunc {
     return func(c *gin.Context) {
         authHeader := c.GetHeader("Authorization")
         if authHeader == "" {
-            ca.logger.Warn("Request missing Authorization header")
+            ca.log.Warn("Request missing Authorization header")
             c.JSON(401, gin.H{"error": "Authorization header required"})
             c.Abort()
             return
@@ -230,7 +230,7 @@ func (ca *ClerkAuth) Middleware() gin.HandlerFunc {
 
         authUser, err := ca.VerifyToken(authHeader)
         if err != nil {
-            ca.logger.Error("Token verification failed",
+            ca.log.Error("Token verification failed",
                 logger.Error(err),
                 logger.String("ip", c.ClientIP()),
             )
@@ -239,7 +239,7 @@ func (ca *ClerkAuth) Middleware() gin.HandlerFunc {
             return
         }
 
-        ca.logger.Debug("User authenticated",
+        ca.log.Debug("User authenticated",
             logger.String("clerk_id", authUser.ClerkID),
             logger.String("email", authUser.Email),
         )

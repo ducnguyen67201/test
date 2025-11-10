@@ -16,19 +16,19 @@ type BlueprintService interface {
 // MockBlueprintService is a mock implementation for MVP
 // This can be replaced with a real LLM integration later
 type MockBlueprintService struct {
-	logger logger.Logger
+	log logger.Logger
 }
 
 // NewMockBlueprintService creates a new mock blueprint service
 func NewMockBlueprintService(log logger.Logger) BlueprintService {
 	return &MockBlueprintService{
-		logger: log,
+		log: log,
 	}
 }
 
 // GenerateBlueprint generates a mock blueprint based on the request
 func (s *MockBlueprintService) GenerateBlueprint(ctx context.Context, request *entity.LabRequest) (*entity.Blueprint, error) {
-	s.logger.Info("Generating mock blueprint",
+	s.log.Info("Generating mock blueprint",
 		logger.String("lab_id", request.ID),
 		logger.String("cve_id", request.CVEID),
 		logger.String("severity", request.Severity.String()))

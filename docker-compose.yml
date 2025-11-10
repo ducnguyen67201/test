@@ -31,6 +31,11 @@ services:
       timeout: 5s
       retries: 5
 
+  # Note: API service configuration (ports 8080 for HTTP, 50051 for gRPC)
+  # Run manually: cd apps/api && go run cmd/server/main.go (HTTP)
+  # Run manually: cd apps/api && go run cmd/grpc/main.go (gRPC)
+  # Ports 8080 and 50051 are available for local development
+
   temporal:
     image: temporalio/auto-setup:1.26.3
     container_name: zerozero-temporal

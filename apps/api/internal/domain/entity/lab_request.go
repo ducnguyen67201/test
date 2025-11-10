@@ -60,6 +60,8 @@ type LabRequest struct {
 	Blueprint          json.RawMessage `gorm:"type:jsonb" json:"blueprint"`
 	GuardrailSnapshot  json.RawMessage `gorm:"type:jsonb" json:"guardrail_snapshot"`
 	RiskRating         json.RawMessage `gorm:"type:jsonb" json:"risk_rating"`
+	WorkflowID         *string         `gorm:"type:varchar(255);index:idx_lab_requests_workflow_id" json:"workflow_id,omitempty"`
+	RunID              *string         `gorm:"type:varchar(255)" json:"run_id,omitempty"`
 	CreatedAt          time.Time       `gorm:"autoCreateTime;index" json:"created_at"`
 	UpdatedAt          time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
 }
