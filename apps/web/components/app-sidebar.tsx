@@ -14,6 +14,7 @@ import {
   Moon,
   Sun,
   Monitor,
+  FlaskConical,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -56,6 +57,11 @@ const navItems = [
     icon: Home,
   },
   {
+    title: 'Labs',
+    url: '/labs/request',
+    icon: FlaskConical,
+  },
+  {
     title: 'Users',
     url: '/users',
     icon: Users,
@@ -85,6 +91,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { toggleSidebar, state } = useSidebar();
   const { theme, setTheme } = useTheme();
   const { signOut } = useClerk();
+  const [mounted, setMounted] = React.useState(false);
+
+  // Only render theme buttons after mounting to avoid hydration mismatch
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -147,35 +159,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <span>{item.title}</span>
                       </a>
                     </SidebarMenuButton>
-                    <div className="flex items-center rounded-md bg-muted p-1 group-data-[collapsible=icon]:hidden">
-                      <Button
-                        variant={theme === 'light' ? 'default' : 'ghost'}
-                        size="icon"
-                        onClick={() => setTheme('light')}
-                        className="h-6 w-6"
-                        title="Light mode"
-                      >
-                        <Sun className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant={theme === 'system' ? 'default' : 'ghost'}
-                        size="icon"
-                        onClick={() => setTheme('system')}
-                        className="h-6 w-6"
-                        title="System mode"
-                      >
-                        <Monitor className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant={theme === 'dark' ? 'default' : 'ghost'}
-                        size="icon"
-                        onClick={() => setTheme('dark')}
-                        className="h-6 w-6"
-                        title="Dark mode"
-                      >
-                        <Moon className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    {mounted && (
+                      <div className="flex items-center rounded-md bg-muted p-1 group-data-[collapsible=icon]:hidden">
+                        <Button
+                          variant={theme === 'light' ? 'default' : 'ghost'}
+                          size="icon"
+                          onClick={() => setTheme('light')}
+                          className="h-6 w-6"
+                          title="Light mode"
+                        >
+                          <Sun className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant={theme === 'system' ? 'default' : 'ghost'}
+                          size="icon"
+                          onClick={() => setTheme('system')}
+                          className="h-6 w-6"
+                          title="System mode"
+                        >
+                          <Monitor className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant={theme === 'dark' ? 'default' : 'ghost'}
+                          size="icon"
+                          onClick={() => setTheme('dark')}
+                          className="h-6 w-6"
+                          title="Dark mode"
+                        >
+                          <Moon className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </SidebarMenuItem>
               );

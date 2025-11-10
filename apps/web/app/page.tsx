@@ -1,41 +1,13 @@
 'use client';
 
-import { useUser, SignInButton } from '@clerk/nextjs';
+import { useAuthenticatedUser } from '@/hooks/use-authenticated-user';
+import { AuthenticatedUser } from '@/components/auth';
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Zap, Shield, Code2, Database } from 'lucide-react';
 
-export default function HomePage() {
-  const { isLoaded, isSignedIn, user } = useUser();
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full mx-4">
-          <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-8 text-center">
-            <h2 className="text-3xl font-bold mb-4">Welcome to ZeroZero</h2>
-            <p className="text-muted-foreground mb-6">
-              A production-ready monorepo demonstrating Clean Architecture,
-              type-safe APIs, and modern authentication.
-            </p>
-            <SignInButton mode="modal">
-              <Button size="lg" className="w-full">
-                Get Started
-              </Button>
-            </SignInButton>
-          </div>
-        </div>
-      </div>
-    );
-  }
+function HomeContent() {
+  const user = useAuthenticatedUser();
 
   return (
     <DashboardLayout>
@@ -171,5 +143,16 @@ export default function HomePage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <AuthenticatedUser
+      accessDeniedTitle="Welcome to ZeroZero"
+      accessDeniedMessage="A production-ready monorepo demonstrating Clean Architecture, type-safe APIs, and modern authentication."
+    >
+      <HomeContent />
+    </AuthenticatedUser>
   );
 }

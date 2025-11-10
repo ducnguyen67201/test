@@ -10,7 +10,8 @@ import (
 
 // Dependencies holds all dependencies needed for routing
 type Dependencies struct {
-	UserUseCase usecase.UserUseCase // TODO: Replace with actual interface
+	UserUseCase usecase.UserUseCase
+	LabUseCase  usecase.LabUseCase
 	ClerkAuth   *auth.ClerkAuth
 	Logger      logger.Logger
 	Config      *config.Config

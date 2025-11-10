@@ -1,37 +1,15 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
+import { useAuthenticatedUser } from '@/hooks/use-authenticated-user';
+import { AuthenticatedUser } from '@/components/auth';
 import { SettingsLayout } from '@/components/settings-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
-export default function SettingsPage() {
-  const { isLoaded, isSignedIn, user } = useUser();
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isSignedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full mx-4">
-          <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-8 text-center">
-            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
-            <p className="text-muted-foreground mb-6">
-              Please sign in to access settings.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+function SettingsContent() {
+  const user = useAuthenticatedUser();
 
   return (
     <SettingsLayout>
@@ -140,5 +118,16 @@ export default function SettingsPage() {
         </div>
       </div>
     </SettingsLayout>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <AuthenticatedUser
+      accessDeniedTitle="Access Denied"
+      accessDeniedMessage="Please sign in to access settings."
+    >
+      <SettingsContent />
+    </AuthenticatedUser>
   );
 }
