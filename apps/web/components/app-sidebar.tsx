@@ -11,6 +11,9 @@ import {
   ChevronRight,
   LogOut,
   User,
+  Moon,
+  Sun,
+  Monitor,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -27,15 +30,19 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useUser, SignOutButton } from '@clerk/nextjs';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
+import { useTheme } from 'next-themes';
 
 const navItems = [
   {
@@ -76,6 +83,8 @@ const bottomNavItems = [
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useUser();
   const { toggleSidebar, state } = useSidebar();
+  const { theme, setTheme } = useTheme();
+  const { signOut } = useClerk();
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -127,73 +136,111 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
-          {bottomNavItems.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title}>
-                <a href={item.url}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {bottomNavItems.map((item) => {
+            if (item.title === 'Settings') {
+              return (
+                <SidebarMenuItem key={item.title}>
+                  <div className="flex items-center gap-2 group-data-[collapsible=icon]:gap-0">
+                    <SidebarMenuButton asChild tooltip={item.title} className="group-data-[collapsible=icon]:flex-none">
+                      <a href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                    <div className="flex items-center rounded-md bg-muted p-1 group-data-[collapsible=icon]:hidden">
+                      <Button
+                        variant={theme === 'light' ? 'default' : 'ghost'}
+                        size="icon"
+                        onClick={() => setTheme('light')}
+                        className="h-6 w-6"
+                        title="Light mode"
+                      >
+                        <Sun className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant={theme === 'system' ? 'default' : 'ghost'}
+                        size="icon"
+                        onClick={() => setTheme('system')}
+                        className="h-6 w-6"
+                        title="System mode"
+                      >
+                        <Monitor className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant={theme === 'dark' ? 'default' : 'ghost'}
+                        size="icon"
+                        onClick={() => setTheme('dark')}
+                        className="h-6 w-6"
+                        title="Dark mode"
+                      >
+                        <Moon className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </SidebarMenuItem>
+              );
+            }
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild tooltip={item.title}>
+                  <a href={item.url}>
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
         </SidebarMenu>
 
         {user && (
           <>
-            {/* Expanded state: Show dropdown menu */}
+            {/* Expanded state: User info with logout button */}
             <div className="px-4 py-3 border-t border-sidebar-border group-data-[collapsible=icon]:hidden">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-3 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md p-2 -mx-2 transition-colors">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-semibold text-primary">
-                        {user.firstName?.charAt(0) || user.emailAddresses[0].emailAddress.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex flex-col overflow-hidden text-left">
-                      <span className="text-sm font-medium truncate">
-                        {user.firstName || 'User'}
-                      </span>
-                      <span className="text-xs text-muted-foreground truncate">
-                        {user.emailAddresses[0].emailAddress}
-                      </span>
-                    </div>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="font-normal">
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">
-                        {user.firstName || 'User'} {user.lastName || ''}
-                      </p>
-                      <p className="text-xs leading-none text-muted-foreground">
-                        {user.emailAddresses[0].emailAddress}
-                      </p>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <a href="/profile" className="cursor-pointer">
-                      <User className="mr-2 h-4 w-4" />
-                      Profile
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a href="/settings" className="cursor-pointer">
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <SignOutButton>
-                    <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign out
-                    </DropdownMenuItem>
-                  </SignOutButton>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-3 rounded-md p-2 -mx-2">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-semibold text-primary">
+                    {user.firstName?.charAt(0) || user.emailAddresses[0].emailAddress.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex flex-col overflow-hidden flex-1">
+                  <span className="text-sm font-medium truncate">
+                    {user.firstName || 'User'}
+                  </span>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {user.emailAddresses[0].emailAddress}
+                  </span>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      title="Sign out"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure you want to sign out?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        You will be logged out of your account and redirected to the home page.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => signOut()}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Sign out
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
 
             {/* Collapsed state: Click to expand sidebar */}
