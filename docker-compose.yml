@@ -31,6 +31,43 @@ services:
       timeout: 5s
       retries: 5
 
+  temporal:
+    image: temporalio/auto-setup:1.26.3
+    container_name: zerozero-temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7233:7233"
+    environment:
+      DB: postgresql
+      POSTGRES_SEEDS: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: postgres
+      POSTGRES_DB: temporal
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    container_name: zerozero-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_UI_PORT: 8080
+    ports:
+      - "8233:8080"
+
+  temporal-admin:
+    image: temporalio/admin-tools:1.26.3
+    container_name: zerozero-temporal-admin
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    command: ["sh", "-c", "sleep infinity"]
+
 volumes:
   postgres-data:
   redis-data:
