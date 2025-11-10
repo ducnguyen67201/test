@@ -53,31 +53,6 @@ const settingsItems = [
     url: '/settings/notifications',
     icon: Bell,
   },
-  {
-    title: 'Webhooks',
-    url: '/settings/webhooks',
-    icon: Webhook,
-  },
-  {
-    title: 'Integrations',
-    url: '/settings/integrations',
-    icon: Puzzle,
-  },
-  {
-    title: 'Rate Limit',
-    url: '/settings/rate-limit',
-    icon: Gauge,
-  },
-  {
-    title: 'Numbers',
-    url: '/settings/numbers',
-    icon: Hash,
-  },
-  {
-    title: 'Metrics Thresholds',
-    url: '/settings/metrics',
-    icon: SlidersHorizontal,
-  },
 ];
 
 export function SettingsSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
