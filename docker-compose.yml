@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -37,7 +35,7 @@ services:
   # Ports 8080 and 50051 are available for local development
 
   temporal:
-    image: temporalio/auto-setup:1.26.3
+    image: temporalio/auto-setup:1.29.1
     container_name: zerozero-temporal
     depends_on:
       postgres:
@@ -45,16 +43,14 @@ services:
     ports:
       - "7233:7233"
     environment:
-      DB: postgresql
+      DB: postgres12_pgx
+      DB_PORT: 5432
       POSTGRES_SEEDS: postgres
-      POSTGRES_PORT: 5432
       POSTGRES_USER: postgres
       POSTGRES_PWD: postgres
-      POSTGRES_DB: temporal
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
 
   temporal-ui:
-    image: temporalio/ui:2.26.2
+    image: temporalio/ui:2.33.0
     container_name: zerozero-temporal-ui
     depends_on:
       - temporal
@@ -65,7 +61,7 @@ services:
       - "8233:8080"
 
   temporal-admin:
-    image: temporalio/admin-tools:1.26.3
+    image: temporalio/admin-tools:latest
     container_name: zerozero-temporal-admin
     depends_on:
       - temporal
