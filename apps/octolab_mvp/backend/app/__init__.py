@@ -1,0 +1,2 @@
+"""OctoLab backend application."""
+

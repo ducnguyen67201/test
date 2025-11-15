@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: octolab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: octolab
+      POSTGRES_PASSWORD: octolab_password
+      POSTGRES_DB: octolab
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
