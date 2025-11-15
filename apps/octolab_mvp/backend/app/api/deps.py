@@ -1,11 +1,15 @@
 """FastAPI dependencies for authentication and database access."""
 
+from typing import Generator
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.config import settings
 from app.db import get_db
 from app.models.user import User
 from app.services.auth_service import decode_token
@@ -69,4 +73,28 @@ async def get_current_user(
         )
 
     return user
+
+
+def get_session() -> Generator[Session, None, None]:
+    """
+    Dependency function to get a sync database session for internal operations.
+
+    Yields:
+        Session: Sync SQLAlchemy session
+    """
+    # Convert async URL to sync URL
+    sync_url = settings.database_url.replace("postgresql+psycopg://", "postgresql+psycopg2://")
+
+    # Create sync engine
+    engine = create_engine(sync_url, echo=False, future=True)
+
+    # Create session factory
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+    # Create and yield session
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 

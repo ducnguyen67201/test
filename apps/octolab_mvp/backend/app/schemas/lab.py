@@ -18,11 +18,21 @@ LabStatusStr = Literal[
 ]
 
 
+class LabIntent(BaseModel):
+    """Structured intent schema for lab creation."""
+
+    software: str | None = None
+    version: str | None = None
+    exploit_family: str | None = None
+    app_domain: str | None = None
+    notes: str | None = None
+
+
 class LabCreate(BaseModel):
     """Schema for creating a new lab."""
 
     recipe_id: UUID | None = None  # Optional, may be selected by LLM
-    requested_intent: dict[str, Any] | None = None  # Raw intent from user
+    intent: LabIntent | None = None  # Structured intent from user
 
 
 class LabResponse(BaseModel):
