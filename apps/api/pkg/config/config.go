@@ -14,6 +14,7 @@ type Config struct {
     Auth     AuthConfig
     Server   ServerConfig
     Temporal TemporalConfig
+    OpenAI   OpenAIConfig
 }
 
 // AppConfig holds application-specific configuration
@@ -60,6 +61,12 @@ type TemporalConfig struct {
     Enabled       bool
 }
 
+// OpenAIConfig holds OpenAI API configuration
+type OpenAIConfig struct {
+    APIKey string
+    Model  string
+}
+
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
     config := &Config{
@@ -94,6 +101,10 @@ func Load() (*Config, error) {
             Namespace:     getEnv("TEMPORAL_NAMESPACE", "zerozero-dev"),
             LabsTaskQueue: getEnv("TEMPORAL_LABS_TASK_QUEUE", "labs.provisioning.v1"),
             Enabled:       getEnvBool("TEMPORAL_ENABLED", false),
+        },
+        OpenAI: OpenAIConfig{
+            APIKey: getEnv("OPENAI_API_KEY", ""),
+            Model:  getEnv("OPENAI_MODEL", "gpt-4o"),
         },
     }
 

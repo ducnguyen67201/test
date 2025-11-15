@@ -10,11 +10,14 @@ import (
 
 // Dependencies holds all dependencies needed for routing
 type Dependencies struct {
-	UserUseCase usecase.UserUseCase
-	LabUseCase  usecase.LabUseCase
-	ClerkAuth   *auth.ClerkAuth
-	Logger      logger.Logger
-	Config      *config.Config
+	UserUseCase   usecase.UserUseCase
+	LabUseCase    usecase.LabUseCase
+	ChatUseCase   usecase.ChatUseCase
+	RecipeUseCase usecase.RecipeUseCase
+	IntentUseCase usecase.IntentUseCase
+	ClerkAuth     *auth.ClerkAuth
+	Logger        logger.Logger
+	Config        *config.Config
 }
 
 // RegisterRoutes sets up all application routes

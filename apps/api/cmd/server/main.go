@@ -75,21 +75,34 @@ func main() {
 	// Initialize repositories with GORM
 	userRepo := db.NewUserRepository(gormDB)
 	labRepo := db.NewLabRepository(gormDB)
+	chatSessionRepo := db.NewChatSessionRepository(gormDB)
+	chatMessageRepo := db.NewChatMessageRepository(gormDB)
+	recipeRepo := db.NewRecipeRepository(gormDB)
+	intentRepo := db.NewIntentRepository(gormDB)
 
 	// Initialize services
 	blueprintService := services.NewMockBlueprintService(appLogger)
+	llmService := services.NewOpenAIService(cfg.OpenAI.APIKey, appLogger)
+	webSearchService := services.NewNVDWebSearchService(appLogger, llmService)
+	validatorService := services.NewDefaultValidatorService(appLogger)
 
 	// Initialize use cases
 	userUseCase := usecase.NewUserUseCase(userRepo, appLogger)
 	labUseCase := usecase.NewLabUseCase(labRepo, userRepo, blueprintService, temporalClient, cfg, appLogger)
+	chatUseCase := usecase.NewChatUseCase(chatSessionRepo, chatMessageRepo, intentRepo, llmService, appLogger)
+	recipeUseCase := usecase.NewRecipeUseCase(recipeRepo, intentRepo, webSearchService, validatorService, appLogger)
+	intentUseCase := usecase.NewIntentUseCase(intentRepo, appLogger)
 
 	// Setup router with all dependencies
 	deps := &router.Dependencies{
-		UserUseCase: userUseCase,
-		LabUseCase:  labUseCase,
-		ClerkAuth:   clerkAuth,
-		Logger:      appLogger,
-		Config:      cfg,
+		UserUseCase:   userUseCase,
+		LabUseCase:    labUseCase,
+		ChatUseCase:   chatUseCase,
+		RecipeUseCase: recipeUseCase,
+		IntentUseCase: intentUseCase,
+		ClerkAuth:     clerkAuth,
+		Logger:        appLogger,
+		Config:        cfg,
 	}
 	r := app.SetupRouter(cfg, deps)
 

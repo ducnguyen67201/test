@@ -41,8 +41,8 @@
 - Protobuf defined with **buf**; codegen for Go and TypeScript (Connect‑Web).
 
 **CI/CD**
-
-- GitHub Actions: proto lint/breaking + codegen checks, Go lint/tests, Web lint/build, Docker build/push, deploys to Fly (API) & Vercel (Web).
+Docker
+- GitHub Actions: proto lint/breaking + codegen checks, Go lint/tests, Web lint/build,  build/push, deploys to Fly (API) & Vercel (Web).
 
 ---
 
