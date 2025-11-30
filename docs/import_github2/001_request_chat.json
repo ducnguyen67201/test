@@ -1,0 +1,56 @@
+[
+  {
+    "title": "[CHAT–004] Define product requirements for in-app chat",
+    "body": "## User Story\nAs a **user of CognObserve**\nI want a clear and consistent chat experience\nSo that I understand how and where I can talk to the AI assistant or support.\n\n## Description\n- Clarify who chats with whom (user↔AI assistant, user↔support, or both)\n- Decide if chat is per-lab, per-tenant, or global\n- Decide retention period and max message size\n\n## Acceptance Criteria\n- Short spec document describing chat scope and constraints\n- Clear answers on: participants, privacy expectations, retention, and rate limits\n- Spec linked from project docs",
+    "labels": ["feature", "product", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–005] Design chat API contract",
+    "body": "## User Story\nAs a **backend developer**\nI want a well-defined chat API contract\nSo that I can implement and evolve chat features safely.\n\n## Description\n- Design HTTP/WebSocket API for chat messages\n- Define schemas for message, conversation, and pagination\n- Include tenant-aware scoping and auth requirements\n\n## Acceptance Criteria\n- OpenAPI updated with endpoints for listing, sending, and streaming messages\n- Request/response examples for each endpoint\n- All operations scoped by authenticated user/tenant only (no client-supplied tenant_id trusted)",
+    "labels": ["feature", "backend", "api", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–006] Implement chat message persistence model",
+    "body": "## User Story\nAs a **user**\nI want my conversations to be stored reliably\nSo that I can resume context and review past interactions.\n\n## Description\n- Add database models for conversations and messages\n- Store tenant_id, user_id, lab_id (optional), role (user/assistant/system), timestamps, and message content\n- Add indexes suitable for fetching recent messages per conversation\n\n## Acceptance Criteria\n- Migration created and applied in dev\n- ORM models added and documented\n- All queries scoped by tenant_id and user permissions\n- Soft-delete or archival strategy documented",
+    "labels": ["feature", "backend", "database", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–007] Implement REST endpoints for chat history and send message",
+    "body": "## User Story\nAs a **user**\nI want to send messages and review history\nSo that I can hold ongoing conversations with the assistant.\n\n## Description\n- Implement endpoints to list conversations and fetch messages\n- Implement endpoint to send a new message into a conversation\n- Enforce authentication and tenant scoping on every query\n\n## Acceptance Criteria\n- Auth required for all chat endpoints\n- Users can only see conversations and messages belonging to their tenant\n- Invalid input returns clear 4xx errors\n- Handlers visible and documented in OpenAPI UI",
+    "labels": ["feature", "backend", "api", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–008] Implement real-time chat delivery (WebSocket or SSE)",
+    "body": "## User Story\nAs a **user**\nI want messages to appear in real time\nSo that conversations feel responsive and natural.\n\n## Description\n- Choose transport (WebSocket or Server-Sent Events) for live message updates\n- Implement server-side subscription scoped by tenant and conversation\n- Ensure backpressure and basic rate limiting\n\n## Acceptance Criteria\n- Client can open a connection and receive new messages without polling\n- Connection is closed or throttled on auth failure or excessive usage\n- No cross-tenant message leakage verified with tests",
+    "labels": ["feature", "backend", "realtime", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–009] Build chat UI component",
+    "body": "## User Story\nAs a **user**\nI want a clean chat interface\nSo that I can read and send messages comfortably.\n\n## Description\n- Implement chat panel UI (message list, input box, send button)\n- Support multi-line messages and keyboard shortcuts\n- Show message roles (user vs assistant) with clear visual distinction\n\n## Acceptance Criteria\n- Chat UI usable on desktop and laptop resolutions\n- Messages render in correct order with timestamps\n- Long messages wrap correctly and scroll behavior is smooth",
+    "labels": ["feature", "frontend", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–010] Wire chat UI to backend APIs",
+    "body": "## User Story\nAs a **user**\nI want the chat UI to actually talk to the backend\nSo that my messages are processed and responses appear.\n\n## Description\n- Connect chat UI to REST endpoints for history and send message\n- Integrate real-time updates (WebSocket/SSE) into the UI\n- Handle loading, error, and reconnect states\n\n## Acceptance Criteria\n- User can open a chat, see previous messages, send new ones, and see responses\n- Network failures show clear error state and allow retry\n- No duplicate messages after reconnecting",
+    "labels": ["integration", "frontend", "backend", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–011] Integrate chat with AI assistant backend",
+    "body": "## User Story\nAs a **user**\nI want the assistant to actually reply\nSo that the chat is useful and not just an echo box.\n\n## Description\n- Route user messages to configured LLM/agent backend (e.g. Qwen-Coder/Qwen-Agent)\n- Persist assistant responses as messages linked to the same conversation\n- Implement basic safety checks and error handling for model failures\n\n## Acceptance Criteria\n- User message triggers model call and assistant reply appears in chat\n- Timeouts and model errors are surfaced as system messages, not crashes\n- No model credentials or secrets are logged in plain text",
+    "labels": ["feature", "backend", "ai", "epic:chat", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[CHAT–012] Add logging, audit, and tests for chat system",
+    "body": "## User Story\nAs a **platform owner**\nI want observability and safety around chat\nSo that I can debug issues and prove isolation.\n\n## Description\n- Add structured logs for chat events without leaking sensitive content\n- Add unit and integration tests for chat APIs and real-time channel\n- Verify multi-tenant isolation and authorization in tests\n\n## Acceptance Criteria\n- Logs include conversation/message IDs and tenant IDs but redact message bodies where appropriate\n- Tests cover: unauthorized access, cross-tenant access attempts, and basic happy paths\n- Chat-related tests run in CI and pass consistently",
+    "labels": ["test", "backend", "security", "epic:chat", "sprint-1"],
+    "assignees": []
+  }
+]

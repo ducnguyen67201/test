@@ -1,0 +1,44 @@
+[
+  {
+    "title": "[POST–001] Design session summary UX",
+    "body": "## User Story\nAs a **user of CyberOctopus**\nI want a clear session summary screen when my lab is ending\nSo that I can understand uptime, results, and evidence produced.\n\n## Description\n- Display lab uptime\n- Display number of evidence artifacts\n- Provide textarea for user notes\n- \"Request Extension\" and \"End and Collect Evidence\" actions\n- Ensure layout matches dark-themed UI mockup\n\n## Acceptance Criteria\n- Summary screen renders on desktop cleanly\n- Uptime is fetched from backend reliably\n- Evidence count matches backend artifact index\n- Notes are optional and persisted if provided\n- Action buttons trigger correct backend events",
+    "labels": ["feature", "frontend", "epic:post-session", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[POST–002] Implement backend session status + uptime API",
+    "body": "## User Story\nAs a **backend engineer**\nI want an authoritative API for session uptime and state\nSo that the summary screen and lifecycle logic remain accurate.\n\n## Description\n- Track laboratory session start time, end time, and state\n- Provide uptime calculation in API response\n- Expose evidence count from evidence store\n- Enforce tenant scoping on all queries\n\n## Acceptance Criteria\n- GET /lab/{id}/summary returns uptime, evidence_count, and state\n- Users can only access sessions within their tenant\n- Health and error handling documented\n- OpenAPI updated",
+    "labels": ["feature", "backend", "api", "epic:post-session", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[POST–003] Implement request extension workflow",
+    "body": "## User Story\nAs a **user**\nI want to request a TTL extension\nSo that I can continue my lab beyond its initial time.\n\n## Description\n- Add POST /lab/{id}/extend endpoint\n- Validate TTL against tenant policies\n- Update session expiry time\n- Notify UI of new expiry\n\n## Acceptance Criteria\n- Extension requests that exceed policy cap return 400 with explanation\n- Successful extension updates TTL and appears in UI\n- Events logged with tenant and user info\n- Tests cover allowed and denied extensions",
+    "labels": ["feature", "backend", "frontend", "epic:post-session", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[POST–004] End session and trigger evidence collection",
+    "body": "## User Story\nAs a **user**\nI want to end my session and collect all evidence\nSo that I can download logs, pcaps, and artifacts safely.\n\n## Description\n- POST /lab/{id}/end endpoint\n- Job queue: collect logs, pcaps, PoC output, timestamps, user notes\n- Package evidence into downloadable archive\n- Switch session to \"ending\" then \"ended\" state\n\n## Acceptance Criteria\n- Evidence bundled into a structured archive (logs/, pcaps/, metadata.json)\n- Sensitive data redacted before export\n- Session resources shut down after evidence collection\n- Event audit trail recorded (end_time, user_id, tenant_id)",
+    "labels": ["feature", "backend", "security", "epic:post-session", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[POST–005] Implement evidence artifact indexing + storage layer",
+    "body": "## User Story\nAs a **platform owner**\nI want a consistent structure for evidence artifacts\nSo that exports, audits, and reviews are easy.\n\n## Description\n- Define artifact schema (type, timestamp, path, metadata)\n- Store artifacts in S3/minio or local store\n- Index artifacts per lab_id and user_id\n- Make sure artifacts are tenant-isolated\n\n## Acceptance Criteria\n- Artifacts appear in API with correct metadata\n- No tenant can access another tenant's evidence\n- Large artifacts streamed rather than fully loaded in memory\n- Tests for access control and storage integrity",
+    "labels": ["feature", "backend", "storage", "security", "epic:post-session", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[POST–006] Evidence download UI + backend integration",
+    "body": "## User Story\nAs a **user**\nI want to download my session evidence bundle\nSo that I can submit it to managers or attach it to reports.\n\n## Description\n- Add UI download action after evidence bundle ready\n- Show evidence count and size\n- Show spinner while evidence bundle is generating\n\n## Acceptance Criteria\n- UI shows a downloadable artifact when backend job completes\n- Links expire after TTL for security\n- Errors (e.g., artifact missing) are graceful\n- Backend enforces auth + tenant scoping",
+    "labels": ["feature", "frontend", "backend", "storage", "epic:post-session", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[POST–007] Automatic cleanup after session ends",
+    "body": "## User Story\nAs a **platform operator**\nI want labs to clean up automatically after shutdown\nSo that no abandoned resources remain running.\n\n## Description\n- Destroy container stack\n- Clean up volumes if user has exported evidence\n- Update session state to 'cleaned'\n- Handle failure modes safely (retry, fallback)\n\n## Acceptance Criteria\n- Cleanup runs reliably after evidence job completes\n- Any failure triggers retry with exponential backoff\n- Logs capture cleanup steps without exposing secrets\n- Tests verify no orphaned containers remain",
+    "labels": ["feature", "backend", "infra", "epic:post-session", "sprint-1"],
+    "assignees": []
+  }
+]
