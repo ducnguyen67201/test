@@ -1,0 +1,56 @@
+[
+  {
+    "title": "[PROV–001] Define lab provisioning workflow and states",
+    "body": "## User Story\nAs a **user of CyberOctopus**\nI want a clear, step-based lab provisioning workflow\nSo that I understand what is happening while my lab spins up.\n\n## Description\n- Define canonical provisioning stages (e.g. Resolve blueprint, Build container bundle, Smoke tests, Deploy infrastructure, Final validation)\n- Define internal state machine and allowed transitions\n- Decide which states are visible to end users vs internal-only\n\n## Acceptance Criteria\n- Document describing provisioning stages and state transitions\n- Mapping from internal states to user-facing step labels and status badges\n- Error states and retry rules defined\n- Document linked from project docs",
+    "labels": ["feature", "product", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–002] Persist provisioning job model",
+    "body": "## User Story\nAs a **backend engineer**\nI want a persistent model for provisioning jobs\nSo that I can track progress, retries, and failure reasons.\n\n## Description\n- Add database model for provisioning_job with tenant_id, user_id, lab_id, current_step, status, and timestamps\n- Store per-step status and optional metadata (duration, error message)\n- Ensure multi-tenant isolation\n\n## Acceptance Criteria\n- Migration created and applied in dev\n- ORM model added and documented\n- All queries scoped by tenant_id and user permissions\n- Indexes added to support querying jobs by tenant and status",
+    "labels": ["feature", "backend", "database", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–003] Implement provisioning orchestration backend",
+    "body": "## User Story\nAs a **platform owner**\nI want a robust orchestrator for lab provisioning\nSo that each step runs in order and failures are handled safely.\n\n## Description\n- Implement backend worker or state machine to execute provisioning steps in sequence\n- Integrate with container build, smoke tests, deployment, and validation subsystems\n- Emit events when steps start, succeed, or fail\n\n## Acceptance Criteria\n- Given a provisioning_job, the orchestrator moves through all configured steps on success\n- On step failure, job status is set to failed with reason recorded\n- Orchestrator runs out-of-band from HTTP request (e.g. queue/background worker)\n- Unit tests cover happy path and failure scenarios",
+    "labels": ["feature", "backend", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–004] Provisioning status API for frontend",
+    "body": "## User Story\nAs a **user**\nI want to see the live status of my lab provisioning\nSo that I know whether to wait, retry, or cancel.\n\n## Description\n- Implement API to fetch provisioning job details and per-step status\n- Scope all responses by authenticated tenant and user\n- Include fields needed for the UI: step labels, order, status, progress percentage, timestamps\n\n## Acceptance Criteria\n- GET endpoint returns provisioning state for a given lab_id or job_id\n- Users can only access jobs belonging to their tenant\n- OpenAPI updated with request/response examples\n- 404 returned when job not found or not authorized",
+    "labels": ["feature", "backend", "api", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–005] Real-time provisioning updates (WebSocket/SSE)",
+    "body": "## User Story\nAs a **user**\nI want the provisioning screen to update in real time\nSo that I do not have to refresh the page to see progress.\n\n## Description\n- Implement WebSocket or Server-Sent Events channel for provisioning updates\n- Stream per-step status changes and overall progress percentage\n- Ensure connections are scoped by tenant and specific job\n\n## Acceptance Criteria\n- Client can subscribe to a provisioning job and receive step updates as they occur\n- Unauthorized or cross-tenant subscriptions are rejected\n- Connection is closed or throttled on abuse (basic rate limiting)\n- Integration tests verify no cross-tenant leakage",
+    "labels": ["feature", "backend", "realtime", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–006] Live logs backend for provisioning jobs",
+    "body": "## User Story\nAs a **power user**\nI want to see live logs for my provisioning job\nSo that I can understand what is happening and debug failures.\n\n## Description\n- Capture provisioning-related logs (build output, smoke tests, deploy steps) and associate them with a provisioning_job\n- Provide paginated/log-stream API or real-time channel for logs\n- Redact secrets and sensitive values before storing or streaming\n\n## Acceptance Criteria\n- Logs are stored or streamed in a way that is scoped by tenant and job\n- Secrets (tokens, passwords, keys) are not written to logs\n- API allows fetching recent logs for a job and incremental updates\n- Tests cover log access control and redaction behavior",
+    "labels": ["feature", "backend", "observability", "security", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–007] Implement lab provisioning UI screen",
+    "body": "## User Story\nAs a **user**\nI want a clear provisioning progress screen\nSo that I can track lab creation from request to ready.\n\n## Description\n- Build UI with a step list (1/5 Resolve blueprint, 2/5 Build container bundle, 3/5 Smoke tests, 4/5 Deploy infrastructure, 5/5 Final validation)\n- Show current step, status badges (done, running, queued, pending), and progress bar\n- Display lab identifier (e.g. Lab #4821) and environment type\n\n## Acceptance Criteria\n- UI matches the designed layout and displays realistic states\n- Steps update dynamically when data changes\n- Screen is responsive for common desktop resolutions\n- Empty/error states are handled gracefully",
+    "labels": ["feature", "frontend", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–008] Wire provisioning UI to status and log APIs",
+    "body": "## User Story\nAs a **user**\nI want the provisioning screen to reflect actual backend progress\nSo that what I see matches what is really happening.\n\n## Description\n- Connect UI to provisioning status API and real-time updates\n- Display live logs in the \"Live Logs\" panel with autoscroll and manual scroll override\n- Handle loading, error, and reconnect states\n\n## Acceptance Criteria\n- When a lab provisioning job is started, the UI shows updating step states and logs in real time\n- Network failures show a clear error and allow retry/reconnect\n- Logs panel does not jitter when user scrolls up to inspect old logs\n- No cross-tenant data visible when switching accounts",
+    "labels": ["integration", "frontend", "backend", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[PROV–009] Implement cancel lab provisioning request",
+    "body": "## User Story\nAs a **user**\nI want to cancel a provisioning request\nSo that I do not waste time or resources on a lab I no longer need.\n\n## Description\n- Add backend support to cancel active provisioning jobs when allowed\n- Ensure partial resources are cleaned up safely\n- Wire cancel button in the UI to call the cancel endpoint and reflect new status\n\n## Acceptance Criteria\n- POST/DELETE endpoint cancels an active provisioning job when permitted\n- Cancelled jobs move to a terminal cancelled state and stop further steps\n- Resources created before cancel are cleaned up or marked for cleanup\n- UI shows clear cancelled status and hides further progress\n- Tests cover allowed and disallowed cancel scenarios",
+    "labels": ["feature", "backend", "frontend", "epic:provisioning", "sprint-1"],
+    "assignees": []
+  }
+]

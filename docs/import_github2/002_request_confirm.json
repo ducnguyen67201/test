@@ -1,0 +1,50 @@
+[
+  {
+    "title": "[REQ–001] Design request confirmation UX (pre-provisioning)",
+    "body": "## User Story\nAs a **user of CyberOctopus**\nI want a clear confirmation screen before provisioning starts\nSo that I can verify inputs, risk level, TTL, and resources before committing.\n\n## Description\n- Add a dedicated confirmation page summarizing: CVE, blueprint, components, attack vector, severity, TTL, and guardrails\n- Show editable input summary (Edit Inputs)\n- Include Confirm Request button to trigger provisioning pipeline\n- Include quick-pick recent CVEs section\n\n## Acceptance Criteria\n- Confirmation screen matches design mockup\n- All fields populated from blueprint + system defaults\n- Edit Inputs returns user to chat/input stage\n- Buttons behave predictably and layout works on desktop resolutions",
+    "labels": ["feature", "frontend", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–002] Implement blueprint summarization API",
+    "body": "## User Story\nAs a **backend engineer**\nI want to generate a safe, structured JSON summary of the requested lab blueprint\nSo that the UI can render a reliable confirmation view.\n\n## Description\n- API endpoint to provide blueprint summary: target system, attack vector, CVE metadata, components, severity\n- Validate the request against allowed CVEs and rules\n- Enforce tenant boundaries\n\n## Acceptance Criteria\n- GET/POST API returns normalized blueprint JSON\n- Only supported CVEs and configurations are allowed (invalid → 400)\n- No client-supplied tenant_id or overrides accepted\n- OpenAPI spec updated",
+    "labels": ["feature", "backend", "api", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–003] Severity gate and risk assessment backend",
+    "body": "## User Story\nAs a **platform owner**\nI want to enforce automated risk scoring for requested labs\nSo that dangerous environments require approval or additional checks.\n\n## Description\n- Risk engine inputs: CVE severity, exploit type, lab components, user role, tenant policy\n- Output: risk_class (Low/Med/High/Critical), rationale, approval_required flag\n- Store results per request\n\n## Acceptance Criteria\n- Risk assessment computed deterministically for same inputs\n- High/Critical requests automatically set approval_required=true\n- Assessment stored with request_id\n- Tests cover sensitive cases: RCE, privilege escalation chains, attack surface expansion",
+    "labels": ["feature", "backend", "security", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–004] Implement approval workflow (if required)",
+    "body": "## User Story\nAs a **tenant admin or reviewer**\nI want to approve or reject high-risk requests\nSo that dangerous labs cannot be created unintentionally.\n\n## Description\n- Add approval_required state to request\n- Add API for admin/reviewer to approve/reject\n- Add UI indicators (Pending, Approved, Rejected)\n- Block provisioning pipeline until approved\n\n## Acceptance Criteria\n- If approval_required=true, Confirm Request triggers a Pending state instead of provisioning\n- Admin dashboard allows approval/rejection\n- Request cannot proceed until approved\n- Unauthorized users cannot bypass approval",
+    "labels": ["feature", "backend", "frontend", "security", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–005] TTL validation & auto-cleanup rules",
+    "body": "## User Story\nAs a **user**\nI want to understand TTL rules before provisioning\nSo that I know how long my lab will live and when auto-cleanup occurs.\n\n## Description\n- Display default TTL, max extension, auto-cleanup toggle\n- Backend validation to enforce TTL caps\n- Enforce tenant policy limits\n\n## Acceptance Criteria\n- UI shows TTL settings clearly\n- Changes validated server-side\n- Requests that exceed policy limits return informative errors\n- TTL metadata stored with request",
+    "labels": ["feature", "backend", "frontend", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–006] Resource limits panel (CPU/Memory/Sessions)",
+    "body": "## User Story\nAs a **user**\nI want to view resource usage and limits before confirming a request\nSo that I understand the cost and constraints.\n\n## Description\n- Display CPU usage %, memory %, session limits, active labs count\n- Pull data from usage quotas API\n- Highlight if request exceeds limits\n\n## Acceptance Criteria\n- UI reflects real usage values\n- Red/yellow indicators when above thresholds\n- Backend enforces quotas as part of request validation\n- Errors are human-friendly (e.g. 'Max Labs Reached')",
+    "labels": ["feature", "frontend", "backend", "observability", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–007] Confirm Request API – start provisioning job",
+    "body": "## User Story\nAs a **user**\nI want to confirm my request and trigger lab creation\nSo that the provisioning pipeline begins.\n\n## Description\n- POST /labs/request/confirm endpoint\n- Validate blueprint, risk assessment, and TTL rules\n- Create provisioning_job entry\n- Return job_id for provisioning screen\n\n## Acceptance Criteria\n- Confirm Request transitions request→provisioning_job\n- Valid request returns job_id\n- Invalid request returns detailed 4xx errors\n- OpenAPI updated",
+    "labels": ["feature", "backend", "api", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  },
+  {
+    "title": "[REQ–008] Wire confirmation screen to backend",
+    "body": "## User Story\nAs a **user**\nI want all UI panels (blueprint, guardrails, TTL, resources) to reflect real data\nSo that everything is correct before I confirm.\n\n## Description\n- Connect UI components to blueprint summary API\n- Connect to risk assessment + TTL + resource limits APIs\n- Support Edit Inputs and Confirm Request actions\n\n## Acceptance Criteria\n- Every field on confirmation screen is populated from backend APIs\n- User can edit inputs and return without losing chat context\n- Confirm Request triggers backend confirm endpoint and navigates to provisioning page\n- UI handles loading and error states cleanly",
+    "labels": ["integration", "frontend", "backend", "epic:request-confirmation", "sprint-1"],
+    "assignees": []
+  }
+]
