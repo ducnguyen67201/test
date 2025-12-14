@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: octolab-labs
+
+resources:
+  - pvc-evidence.yaml
+  - secret-novnc.yaml
+  - deployment.yaml
+  - service-novnc.yaml
+  - ingress.yaml
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.octolab.io/component: octobox-beta
+

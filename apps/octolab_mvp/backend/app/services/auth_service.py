@@ -59,7 +59,10 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
 
     to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    # SECURITY: SecretStr requires .get_secret_value() to access the value
+    encoded_jwt = jwt.encode(
+        to_encode, settings.secret_key.get_secret_value(), algorithm=settings.algorithm
+    )
     return encoded_jwt
 
 
@@ -74,7 +77,10 @@ def decode_token(token: str) -> dict | None:
         Decoded token payload as dictionary, or None if token is invalid/expired
     """
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        # SECURITY: SecretStr requires .get_secret_value() to access the value
+        payload = jwt.decode(
+            token, settings.secret_key.get_secret_value(), algorithms=[settings.algorithm]
+        )
         return payload
     except JWTError:
         return None

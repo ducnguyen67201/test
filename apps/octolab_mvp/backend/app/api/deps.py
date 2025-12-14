@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,8 +14,15 @@ from app.db import get_db
 from app.models.user import User
 from app.services.auth_service import decode_token
 
+# Alias for async session (used by internal endpoints)
+get_async_session = get_db
+
 # OAuth2 scheme for token extraction
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+# Module-level singleton for sync database engine (prevents connection leak)
+_sync_engine: Engine | None = None
+_sync_sessionmaker: sessionmaker | None = None
 
 
 async def get_current_user(
@@ -79,20 +86,23 @@ def get_session() -> Generator[Session, None, None]:
     """
     Dependency function to get a sync database session for internal operations.
 
+    Uses module-level singleton engine to prevent connection pool exhaustion.
+    The engine is created once and reused across all requests.
+
     Yields:
         Session: Sync SQLAlchemy session
     """
-    # Convert async URL to sync URL
-    sync_url = settings.database_url.replace("postgresql+psycopg://", "postgresql+psycopg2://")
+    global _sync_engine, _sync_sessionmaker
 
-    # Create sync engine
-    engine = create_engine(sync_url, echo=False, future=True)
+    if _sync_engine is None:
+        # Convert async URL to sync URL
+        sync_url = settings.database_url.replace(
+            "postgresql+psycopg://", "postgresql+psycopg2://"
+        )
+        _sync_engine = create_engine(sync_url, echo=False, future=True)
+        _sync_sessionmaker = sessionmaker(bind=_sync_engine, expire_on_commit=False)
 
-    # Create session factory
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-
-    # Create and yield session
-    session = SessionLocal()
+    session = _sync_sessionmaker()
     try:
         yield session
     finally:

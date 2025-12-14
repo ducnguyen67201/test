@@ -49,4 +49,5 @@ docker-compose.override.yml
 
 # Temporary files
 tmp/
-temp/
+temp/apps/octolab_mvp/infra/firecracker/artifacts/
+apps/octolab_mvp/infra/firecracker/bin/

@@ -1,0 +1,40 @@
+---
+# Allow DNS Egress Network Policy for octolab-labs namespace
+#
+# Permits lab pods to perform DNS lookups via CoreDNS in kube-system.
+# This is the minimum network access required for most applications.
+#
+# Allows egress to:
+# - CoreDNS (kube-dns service) on TCP/UDP port 53
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: octolab-labs
+  labels:
+    app.octolab.io/component: security
+    app.octolab.io/managed-by: platform
+spec:
+  # Apply to all pods in the namespace
+  podSelector: {}
+
+  policyTypes:
+    - Egress
+
+  egress:
+    # Allow DNS queries to CoreDNS in kube-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        # DNS over UDP (primary)
+        - protocol: UDP
+          port: 53
+        # DNS over TCP (fallback for large responses)
+        - protocol: TCP
+          port: 53

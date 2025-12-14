@@ -23,6 +23,7 @@ class UserResponse(BaseModel):
     email: str
     created_at: datetime
     updated_at: datetime
+    is_admin: bool = False
 
 
 class UserInDB(UserResponse):

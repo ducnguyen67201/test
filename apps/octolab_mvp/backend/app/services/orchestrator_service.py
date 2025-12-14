@@ -30,14 +30,14 @@ def advance_lab_states(session: Session) -> dict[str, int]:
     result_ready = session.execute(stmt_ready)
     to_ready_count = result_ready.rowcount
 
-    # Move ENDING → FINISHED (with finished_at timestamp)
-    now = datetime.now(timezone.utc)
+    # Move ENDING -> FINISHED only for labs where teardown has already completed
+    # Teardown paths (terminate_lab or force teardown) must set finished_at when done.
     stmt_finished = (
         update(Lab)
         .where(Lab.status == LabStatus.ENDING)
+        .where(Lab.finished_at.is_not(None))
         .values(
             status=LabStatus.FINISHED,
-            finished_at=now,
         )
     )
     result_finished = session.execute(stmt_finished)

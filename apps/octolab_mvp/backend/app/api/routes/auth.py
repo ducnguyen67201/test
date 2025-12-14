@@ -5,9 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.config import settings
 from app.db import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegisterRequest, Token
+from app.schemas.auth import LoginRequest, RegisterRequest, RegisterResponse, Token
 from app.schemas.user import UserResponse
 from app.services.auth_service import (
     authenticate_user,
@@ -18,48 +19,95 @@ from app.services.auth_service import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _is_admin(email: str) -> bool:
+    """Check if email is in admin allowlist.
+
+    SECURITY: Recomputes from settings.admin_emails on each call.
+    This ensures instant revoke on config change + restart.
+
+    Args:
+        email: User email to check
+
+    Returns:
+        True if user is an admin, False otherwise
+    """
+    return (email or "").strip().lower() in settings.admin_emails
+
+
 @router.post(
     "/register",
-    response_model=UserResponse,
+    response_model=RegisterResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user",
+    responses={
+        404: {"description": "Self-registration disabled"},
+        409: {"description": "Email already registered"},
+    },
 )
 async def register(
     request: RegisterRequest,
     db: AsyncSession = Depends(get_db),
-) -> UserResponse:
+) -> RegisterResponse:
     """
     Register a new user with email and password.
+
+    Requires ALLOW_SELF_SIGNUP=true in environment. Returns 404 if disabled
+    to avoid exposing endpoint existence.
 
     Args:
         request: Registration request with email and password
         db: Database session
 
     Returns:
-        UserResponse: Created user information (without password hash)
+        RegisterResponse: Access token and user information
 
     Raises:
-        HTTPException: 400 if email already exists
+        HTTPException: 404 if self-signup disabled, 409 if email exists
     """
+    # SECURITY: Gate registration behind config flag; return 404 to hide endpoint
+    if not settings.allow_self_signup:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not Found",
+        )
+
+    # Normalize email (strip whitespace, lowercase)
+    normalized_email = request.email.strip().lower()
+
     # Check if user with email already exists
-    result = await db.execute(select(User).where(User.email == request.email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         )
 
     # Hash password and create new user
+    # SECURITY: Ignore any role/tenant fields from request; force defaults
     password_hash = hash_password(request.password)
-    new_user = User(email=request.email, password_hash=password_hash)
+    new_user = User(email=normalized_email, password_hash=password_hash)
 
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
 
-    return UserResponse.model_validate(new_user)
+    # Create access token for immediate login (include admin status)
+    is_admin = _is_admin(new_user.email)
+    access_token = create_access_token(data={"sub": str(new_user.id), "is_admin": is_admin})
+
+    return RegisterResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse(
+            id=new_user.id,
+            email=new_user.email,
+            created_at=new_user.created_at,
+            updated_at=new_user.updated_at,
+            is_admin=is_admin,
+        ),
+    )
 
 
 @router.post(
@@ -94,8 +142,9 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create access token with user ID as subject
-    access_token = create_access_token(data={"sub": str(user.id)})
+    # Create access token with user ID as subject and admin status
+    is_admin = _is_admin(user.email)
+    access_token = create_access_token(data={"sub": str(user.id), "is_admin": is_admin})
 
     return Token(access_token=access_token, token_type="bearer")
 
@@ -115,7 +164,13 @@ async def get_me(
         current_user: Current authenticated user (from dependency)
 
     Returns:
-        UserResponse: Current user information
+        UserResponse: Current user information including admin status
     """
-    return UserResponse.model_validate(current_user)
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+        is_admin=_is_admin(current_user.email),
+    )
 

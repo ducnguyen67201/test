@@ -4,12 +4,25 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.schemas.user import UserResponse
+
 
 class RegisterRequest(BaseModel):
     """Schema for user registration."""
 
     email: EmailStr
     password: str = Field(min_length=8, description="Password must be at least 8 characters")
+
+
+class RegisterResponse(BaseModel):
+    """Schema for successful registration response.
+
+    Returns both token (for immediate login) and user info.
+    """
+
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
 
 
 class LoginRequest(BaseModel):

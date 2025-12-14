@@ -1,0 +1,60 @@
+# k3d cluster configuration for OctoLab local development
+# This config creates a single-node Kubernetes cluster for testing
+#
+# IMPORTANT: Only run from Linux/WSL filesystem (not Windows mounts like /mnt/c)
+# See README.md for details
+
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+
+metadata:
+  name: octolab-dev
+
+servers: 1
+agents: 0
+
+# Expose ingress ports only to localhost (127.0.0.1) for security
+ports:
+  # HTTP ingress: localhost:8080 -> loadbalancer:80
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+  # HTTPS ingress: localhost:8443 -> loadbalancer:443
+  - port: 8443:443
+    nodeFilters:
+      - loadbalancer
+
+options:
+  k3d:
+    # Wait for cluster to be ready
+    wait: true
+    # Timeout for cluster creation
+    timeout: "60s"
+    # Don't disable loadbalancer (traefik)
+    disableLoadbalancer: false
+
+  k3s:
+    # Extra args for k3s server
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+    # We'll install our own ingress controller if needed
+
+  kubeconfig:
+    # Update default kubeconfig
+    updateDefaultKubeconfig: true
+    # Make this the current context
+    switchCurrentContext: true
+
+# Runtime configuration
+runtime:
+  # GPU support (disabled for now, can enable if needed)
+  gpuRequest: ""
+
+# Image volume (for faster image loading)
+# registries:
+#   create:
+#     name: k3d-octolab-registry
+#     host: "0.0.0.0"
+#     hostPort: "5000"
