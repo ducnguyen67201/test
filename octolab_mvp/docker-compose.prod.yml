@@ -1,0 +1,172 @@
+version: '3.8'
+
+# OctoLab Production Docker Compose Stack
+# ========================================
+#
+# This configuration is designed for Hetzner cloud deployment with Firecracker runtime.
+#
+# Services:
+#   - postgres: Database (containerized)
+#   - backend: FastAPI application (containerized, connects to host firecracker/netd)
+#   - frontend: Nginx serving React static files (containerized)
+#
+# NOT in this compose (run on host):
+#   - microvm-netd: Network daemon for Firecracker (requires CAP_NET_ADMIN)
+#   - firecracker: MicroVM hypervisor (requires KVM access)
+#
+# Usage:
+#   ./deploy.sh        # Full deployment with migrations
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml logs -f backend
+
+services:
+  # ==========================================================================
+  # PostgreSQL Database
+  # ==========================================================================
+  postgres:
+    image: postgres:16
+    container_name: octolab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-octolab}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-octolab}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-octolab} -d ${DB_NAME:-octolab}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - octolab-internal
+    # Expose to localhost for host-based backend
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # ==========================================================================
+  # Backend API
+  # ==========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: octolab-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database (use psycopg for sync driver, asyncpg for async)
+      DATABASE_URL: postgresql+psycopg://${DB_USER:-octolab}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-octolab}
+
+      # Application
+      APP_ENV: production
+      APP_NAME: OctoLab
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Security (required in production)
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      EVIDENCE_HMAC_SECRET: ${EVIDENCE_HMAC_SECRET:?EVIDENCE_HMAC_SECRET is required}
+
+      # Runtime - Firecracker for production
+      OCTOLAB_RUNTIME: firecracker
+      MICROVM_STATE_DIR: /var/lib/octolab/microvm
+      MICROVM_NETD_SOCK: /run/octolab/microvm-netd.sock
+      MICROVM_KERNEL_PATH: ${MICROVM_KERNEL_PATH:-/var/lib/octolab/firecracker/vmlinux}
+      MICROVM_ROOTFS_BASE_PATH: ${MICROVM_ROOTFS_BASE_PATH:-/var/lib/octolab/firecracker/rootfs.ext4}
+      FIRECRACKER_BIN: ${FIRECRACKER_BIN:-/usr/local/bin/firecracker}
+      JAILER_BIN: ${JAILER_BIN:-/usr/local/bin/jailer}
+
+      # VNC/noVNC
+      VNC_BASE_URL: ${VNC_BASE_URL:-http://localhost:6080/vnc.html}
+      NOVNC_BIND_ADDR: ${NOVNC_BIND_ADDR:-127.0.0.1}
+      NOVNC_PORT_MIN: ${NOVNC_PORT_MIN:-30000}
+      NOVNC_PORT_MAX: ${NOVNC_PORT_MAX:-39999}
+      HACKVM_PUBLIC_HOST: ${HACKVM_PUBLIC_HOST:-localhost}
+
+      # Guacamole (optional)
+      GUAC_ENABLED: ${GUAC_ENABLED:-false}
+      GUAC_BASE_URL: ${GUAC_BASE_URL:-http://127.0.0.1:8081/guacamole}
+      GUAC_ADMIN_USER: ${GUAC_ADMIN_USER:-guacadmin}
+      GUAC_ADMIN_PASSWORD: ${GUAC_ADMIN_PASSWORD:-}
+      GUAC_ENC_KEY: ${GUAC_ENC_KEY:-}
+      GUACD_CONTAINER_NAME: ${GUACD_CONTAINER_NAME:-octolab-guacd}
+
+      # Admin
+      OCTOLAB_ADMIN_EMAILS: ${OCTOLAB_ADMIN_EMAILS:-}
+      ALLOW_SELF_SIGNUP: ${ALLOW_SELF_SIGNUP:-false}
+
+      # Teardown worker
+      TEARDOWN_WORKER_ENABLED: ${TEARDOWN_WORKER_ENABLED:-true}
+      TEARDOWN_WORKER_INTERVAL_SECONDS: ${TEARDOWN_WORKER_INTERVAL_SECONDS:-5.0}
+
+      # Quotas
+      MAX_ACTIVE_LABS_PER_USER: ${MAX_ACTIVE_LABS_PER_USER:-2}
+      MAX_LAB_CREATES_PER_HOUR_PER_USER: ${MAX_LAB_CREATES_PER_HOUR_PER_USER:-10}
+      DEFAULT_LAB_TTL_MINUTES: ${DEFAULT_LAB_TTL_MINUTES:-120}
+
+      # Internal API token (for Falco)
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+
+    volumes:
+      # Firecracker state directory (shared with host)
+      - /var/lib/octolab:/var/lib/octolab
+      # Runtime socket directory (netd runs on host)
+      - /run/octolab:/run/octolab
+      # Docker socket for compose runtime fallback (optional, remove for pure firecracker)
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+    networks:
+      - octolab-internal
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # Frontend (Nginx serving React static files)
+  # ==========================================================================
+  frontend:
+    image: nginx:alpine
+    container_name: octolab-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - octolab-internal
+      - guacamole_guac-internal  # For nginx to proxy /guacamole/ to Guacamole container
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+# ==========================================================================
+# Networks
+# ==========================================================================
+networks:
+  octolab-internal:
+    driver: bridge
+  guacamole_guac-internal:
+    external: true  # Created by infra/guacamole/docker-compose.yml
+
+# ==========================================================================
+# Volumes
+# ==========================================================================
+volumes:
+  postgres_data:
+    driver: local

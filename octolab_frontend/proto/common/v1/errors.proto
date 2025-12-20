@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package common.v1;
+
+// ErrorDetail provides detailed error information
+message ErrorDetail {
+  string code = 1;
+  string message = 2;
+  map<string, string> metadata = 3;
+}
+
+// ValidationError represents a field validation error
+message ValidationError {
+  string field = 1;
+  string message = 2;
+  string code = 3;
+}
+
+// ValidationErrors contains multiple validation errors
+message ValidationErrors {
+  repeated ValidationError errors = 1;
+}

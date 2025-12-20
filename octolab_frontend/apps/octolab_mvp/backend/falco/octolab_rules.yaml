@@ -1,0 +1,58 @@
+# OctoLab Falco Rules
+# Capture commands, network connections, and file reads from lab containers
+#
+# Security note: These rules only fire for containers matching lab-* naming
+# pattern, preventing leakage from non-lab containers.
+
+- list: octolab_sensitive_dirs
+  items: [/etc/shadow, /etc/passwd, /proc, /sys]
+
+- list: octolab_network_ports
+  items: [21, 22, 23, 25, 53, 80, 443, 445, 3306, 5432, 6379, 8080, 8443]
+
+# Rule 1: Command execution (execve syscall)
+- rule: octolab_command_exec
+  desc: Capture command executions in lab containers for evidence
+  condition: >
+    spawned_process and
+    container and
+    container.name startswith "lab-"
+  output: >
+    {"type":"command","timestamp":"%evt.time.s","container":"%container.name","user":"%user.name","uid":%user.uid,"cmdline":"%proc.cmdline","cwd":"%proc.cwd","ppid":%proc.ppid,"pname":"%proc.pname"}
+  priority: NOTICE
+  tags: [octolab, evidence, command]
+
+# Rule 2: Outbound network connections
+- rule: octolab_network_connect
+  desc: Capture outbound network connections from lab containers
+  condition: >
+    evt.type in (connect) and
+    evt.dir = > and
+    container and
+    container.name startswith "lab-" and
+    fd.typechar = 4 and
+    fd.ip != "0.0.0.0" and
+    not fd.sip in (127.0.0.0/8)
+  output: >
+    {"type":"network","timestamp":"%evt.time.s","container":"%container.name","user":"%user.name","proto":"%fd.l4proto","src_ip":"%fd.sip","src_port":%fd.sport,"dst_ip":"%fd.rip","dst_port":%fd.rport,"cmdline":"%proc.cmdline"}
+  priority: NOTICE
+  tags: [octolab, evidence, network]
+
+# Rule 3: Sensitive file reads
+- rule: octolab_sensitive_read
+  desc: Capture reads of sensitive files in lab containers
+  condition: >
+    evt.type in (open, openat) and
+    evt.dir = < and
+    container and
+    container.name startswith "lab-" and
+    (fd.name startswith /etc/ or
+     fd.name startswith /proc/ or
+     fd.name contains passwd or
+     fd.name contains shadow or
+     fd.name contains .ssh or
+     fd.name contains .bash_history)
+  output: >
+    {"type":"file_read","timestamp":"%evt.time.s","container":"%container.name","user":"%user.name","file":"%fd.name","cmdline":"%proc.cmdline"}
+  priority: NOTICE
+  tags: [octolab, evidence, file_read]

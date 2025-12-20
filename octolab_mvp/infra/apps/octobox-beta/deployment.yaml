@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octobox-beta
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octobox-beta
+  template:
+    metadata:
+      labels:
+        app: octobox-beta
+    spec:
+      containers:
+        - name: octobox-beta
+          image: octobox-beta:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: VNC_LOCALHOST
+              value: "1"
+            - name: VNC_RFBPORT
+              value: "5900"
+            - name: VNC_DISPLAY
+              value: ":0"
+          volumeMounts:
+            - name: evidence
+              mountPath: /evidence
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            # readOnlyRootFilesystem: false (XFCE/VNC need writable /tmp, /home, /var)
+        - name: novnc
+          image: bonigarcia/novnc:1.3.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6080
+              name: novnc
+          env:
+            - name: VNC_SERVER
+              value: "localhost:5900"
+            - name: AUTOCONNECT
+              value: "true"
+            - name: VNC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: octobox-beta-novnc-secret
+                  key: VNC_PASSWORD
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: evidence
+          persistentVolumeClaim:
+            claimName: octobox-beta-evidence
+

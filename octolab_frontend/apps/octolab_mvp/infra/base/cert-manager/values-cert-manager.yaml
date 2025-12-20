@@ -1,0 +1,11 @@
+# Minimal values for cert-manager in the OctoLab cluster.
+# We rely mostly on chart defaults for now.
+
+# Install CRDs automatically (required for cert-manager to function)
+installCRDs: true
+
+# Future configuration options can be added here:
+# - Resource limits
+# - Webhook configuration
+# - Feature flags
+

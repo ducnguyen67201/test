@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: octolab-system
+
+resources:
+  - secret-db.yaml
+  - statefulset-postgres.yaml
+  - service-postgres.yaml
+  - deployment-guacd.yaml
+  - service-guacd.yaml
+  - deployment-guac-web.yaml
+  - service-guac-web.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.octolab.io/component: guacamole
+

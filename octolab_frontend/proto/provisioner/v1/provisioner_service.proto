@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package provisioner.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// ProvisionerService handles lab environment provisioning and validation
+// Called by Temporal activities to provision and validate lab environments
+service ProvisionerService {
+  // StartProvisioning initiates lab environment provisioning
+  rpc StartProvisioning(StartProvisioningRequest) returns (StartProvisioningResponse);
+
+  // GetProvisioningStatus queries the status of a provisioning job (read-only)
+  rpc GetProvisioningStatus(GetStatusRequest) returns (GetStatusResponse);
+
+  // ValidateEnvironment runs validation checks on a provisioned environment
+  rpc ValidateEnvironment(ValidateRequest) returns (ValidateResponse);
+
+  // CancelProvisioning cancels an in-progress provisioning job
+  rpc CancelProvisioning(CancelProvisioningRequest) returns (CancelProvisioningResponse);
+}
+
+// EnvironmentPlan describes the infrastructure to be provisioned
+message EnvironmentPlan {
+  string os_image = 1;
+  int32 cpu_cores = 2;
+  int32 memory_mb = 3;
+  int32 disk_gb = 4;
+  repeated string required_packages = 5;
+  repeated NetworkPort exposed_ports = 6;
+  google.protobuf.Struct metadata = 7;
+}
+
+// NetworkPort represents a network port configuration
+message NetworkPort {
+  int32 port = 1;
+  string protocol = 2;
+  string description = 3;
+}
+
+// ValidationStep describes a validation check to perform
+message ValidationStep {
+  string name = 1;
+  string type = 2;
+  string command = 3;
+  string expected_output = 4;
+}
+
+// StartProvisioning request/response
+message StartProvisioningRequest {
+  string lab_id = 1;
+  string cve_id = 2;
+  EnvironmentPlan environment_plan = 3;
+  repeated ValidationStep validation_steps = 4;
+  google.protobuf.Struct automation_hooks = 5;
+}
+
+message StartProvisioningResponse {
+  bool success = 1;
+  string job_id = 2;
+  string message = 3;
+}
+
+// GetProvisioningStatus request/response (read-only polling)
+message GetStatusRequest {
+  string job_id = 1;
+}
+
+message GetStatusResponse {
+  string job_id = 1;
+  ProvisioningStatus status = 2;
+  int32 progress_percent = 3;
+  string current_step = 4;
+  bool complete = 5;
+  bool failed = 6;
+  string error_message = 7;
+  google.protobuf.Struct details = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp completed_at = 10;
+}
+
+enum ProvisioningStatus {
+  PROVISIONING_STATUS_UNSPECIFIED = 0;
+  PROVISIONING_STATUS_PENDING = 1;
+  PROVISIONING_STATUS_INITIALIZING = 2;
+  PROVISIONING_STATUS_BUILDING = 3;
+  PROVISIONING_STATUS_CONFIGURING = 4;
+  PROVISIONING_STATUS_FINALIZING = 5;
+  PROVISIONING_STATUS_COMPLETED = 6;
+  PROVISIONING_STATUS_FAILED = 7;
+  PROVISIONING_STATUS_CANCELLED = 8;
+}
+
+// ValidateEnvironment request/response
+message ValidateRequest {
+  string lab_id = 1;
+  string job_id = 2;
+  repeated ValidationStep validation_steps = 3;
+}
+
+message ValidateResponse {
+  bool success = 1;
+  bool passed = 2;
+  repeated ValidationResult results = 3;
+  string summary = 4;
+}
+
+message ValidationResult {
+  string step_name = 1;
+  bool passed = 2;
+  string actual_output = 3;
+  string error_message = 4;
+  int32 duration_ms = 5;
+}
+
+// CancelProvisioning request/response
+message CancelProvisioningRequest {
+  string job_id = 1;
+  string reason = 2;
+}
+
+message CancelProvisioningResponse {
+  bool success = 1;
+  string message = 2;
+}

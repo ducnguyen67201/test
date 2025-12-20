@@ -1,0 +1,86 @@
+services:
+  octobox:
+    build:
+      context: ../images/octobox-beta
+      dockerfile: Dockerfile
+      args:
+        # CMDLOG_BUST: Pass via env to invalidate cmdlog layer cache (dev only)
+        # Example: CMDLOG_BUST=$(date +%s) docker compose build octobox
+        CMDLOG_BUST: "${CMDLOG_BUST:-0}"
+        # BUILD_TIMESTAMP: For provenance tracking (server-set, not client input)
+        BUILD_TIMESTAMP: "${BUILD_TIMESTAMP:-unknown}"
+    ports:
+      # Only expose noVNC port when NOT in GUAC mode
+      # In GUAC mode, guacd connects to VNC directly via lab_net
+      - "${COMPOSE_BIND_HOST:-127.0.0.1}:${NOVNC_HOST_PORT:-6080}:6080"
+    volumes:
+      - octobox_home:/home/pentester
+      # User evidence: OctoBox can write to this (tlog, commands.log)
+      # SECURITY: OctoBox does NOT mount evidence_auth - only user evidence
+      - evidence_user:/evidence
+    networks:
+      - lab_net
+    restart: unless-stopped
+    environment:
+      - LAB_ID=${LAB_ID:-default}
+      - OCTOBOX_VNC_AUTH=${OCTOBOX_VNC_AUTH:-password}
+      # GUAC_ENABLED: when true, VNC binds to 0.0.0.0 for guacd access, noVNC is disabled
+      - GUAC_ENABLED=${GUAC_ENABLED:-false}
+      # VNC_PASSWORD: per-lab VNC password (REQUIRED for provisioned labs)
+      # SECURITY: Never log this value. Backend generates per-lab passwords.
+      # Uses ${VAR?err} form to fail fast if ComposeRuntime forgets to pass it.
+      - VNC_PASSWORD=${VNC_PASSWORD?VNC_PASSWORD required by backend}
+      # VNC_PASSWORD_ALLOW_DEFAULT: Dev-only bypass (set to 1 to allow default password)
+      # SECURITY: Never enable in production. Only for local dev convenience.
+      - VNC_PASSWORD_ALLOW_DEFAULT=${VNC_PASSWORD_ALLOW_DEFAULT:-}
+      # Bind VNC to 0.0.0.0 inside the lab network so guacd/peers can reach it
+      # (still not published to the host; only noVNC 6080 is exposed via COMPOSE_BIND_HOST)
+      - VNC_LOCALHOST=0
+    # Note: Healthcheck is defined in Dockerfile (checks VNC 5900 and Xtigervnc process)
+    # No compose-level healthcheck override needed
+
+  target-web:
+    image: httpd:2.4
+    networks:
+      - lab_net
+    restart: unless-stopped
+    environment:
+      - LAB_ID=${LAB_ID:-default}
+
+  lab-gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    sysctls:
+      - net.ipv4.ip_forward=1
+    volumes:
+      - lab_pcap:/pcap
+      # Authoritative evidence: Gateway writes network captures here
+      # SECURITY: Only gateway and backend can write to auth volume
+      - evidence_auth:/evidence/auth
+    networks:
+      - lab_net
+      - egress_net
+    environment:
+      - LAB_ID=${LAB_ID:-default}
+    restart: unless-stopped
+
+volumes:
+  # NOTE: Do NOT add 'name:' here - compose project-scoped naming ensures
+  # each lab gets isolated volumes: <project>_octobox_home, <project>_lab_pcap, etc.
+  # Adding 'name: octobox_home' would cause cross-lab volume collisions (security issue).
+  octobox_home:
+  lab_pcap:
+  # Authoritative evidence (written by gateway/backend only - OctoBox cannot modify)
+  evidence_auth:
+  # User evidence (written by OctoBox - tlog sessions, commands.log)
+  evidence_user:
+
+networks:
+  lab_net:
+    driver: bridge
+  egress_net:
+    driver: bridge

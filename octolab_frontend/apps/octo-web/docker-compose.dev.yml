@@ -1,0 +1,18 @@
+services:
+  octo-web:
+    image: node:20-slim
+    container_name: octo-web-frontend
+    working_dir: /app/apps/octo-web
+    volumes:
+      - /home/architect/apps/octolab_frontend:/app
+      - /home/architect/apps/octolab_frontend/node_modules:/app/node_modules
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://octolab:0ee76748f461c3d892b1b35806c1dca8@localhost:5432/octo_web
+      - OCTOLAB_MVP_URL=http://localhost:8000
+      - PATH=/app/apps/octo-web/node_modules/.bin:/app/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    network_mode: host
+    restart: unless-stopped
+    command: npm run dev -- --hostname 127.0.0.1 --port 3000

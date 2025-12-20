@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: octolab-system
+  labels:
+    app.octolab.io/role: system
+

@@ -1,0 +1,108 @@
+# Apache Guacamole Stack for OctoLab Development
+#
+# SECURITY:
+# - Guacamole web UI binds to 127.0.0.1 only (no external access)
+# - guacd and postgres have NO published ports by default
+# - Default admin password should be changed after first login
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose down
+#
+# Debug mode (exposes guac-db on host port 5433):
+#   docker compose --profile debug up -d
+#
+# Admin login: http://127.0.0.1:8081/guacamole/
+#   Username: guacadmin
+#   Password: guacadmin (CHANGE THIS!)
+
+services:
+  # PostgreSQL database for Guacamole
+  guac-db:
+    image: postgres:16-alpine
+    container_name: octolab-guac-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole
+      POSTGRES_PASSWORD: ${GUAC_DB_PASSWORD:-guacamole_dev_password}
+    volumes:
+      - guac-db-data:/var/lib/postgresql/data
+      - ./init/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql:ro
+    networks:
+      - guac-internal
+    healthcheck:
+      # Use CMD-SHELL to expand env vars; check on 127.0.0.1 to avoid hostname resolution issues
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    # SECURITY: No ports published - internal only
+    # Use --profile debug to expose on port 5433 for debugging
+
+  # Debug service: exposes guac-db on host port 5433 (only with --profile debug)
+  guac-db-debug:
+    image: postgres:16-alpine
+    container_name: octolab-guac-db-debug
+    profiles:
+      - debug
+    network_mode: "service:guac-db"
+    entrypoint: ["sh", "-c", "echo 'Debug proxy not needed - guac-db exposed via ports'"]
+    depends_on:
+      guac-db:
+        condition: service_healthy
+
+  # guacd - Guacamole daemon (protocol proxy)
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: octolab-guacd
+    restart: unless-stopped
+    networks:
+      - guac-internal
+    # SECURITY: No ports published - internal only
+    # This container will be connected to lab networks dynamically
+    # by the backend when labs are provisioned
+
+  # Guacamole web application
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    container_name: octolab-guacamole
+    restart: unless-stopped
+    depends_on:
+      guac-db:
+        condition: service_healthy
+      guacd:
+        condition: service_started
+    environment:
+      GUACD_HOSTNAME: guacd
+      GUACD_PORT: 4822
+      POSTGRESQL_HOSTNAME: guac-db
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_USER: guacamole
+      POSTGRESQL_PASSWORD: ${GUAC_DB_PASSWORD:-guacamole_dev_password}
+      # Optional: Enable TOTP for admin (recommended for production)
+      # TOTP_ENABLED: "true"
+    networks:
+      - guac-internal
+    ports:
+      # SECURITY: Bind to localhost only - nginx proxies public requests
+      - "127.0.0.1:8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/guacamole/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  guac-internal:
+    driver: bridge
+    # Internal network for guac services only
+    # guacd will be connected to lab networks dynamically
+
+volumes:
+  guac-db-data:
+    driver: local

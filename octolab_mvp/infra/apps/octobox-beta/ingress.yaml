@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: octobox-beta-novnc
+  annotations:
+    traefik.ingress.kubernetes.io/service-upgrade: "websocket"
+    traefik.ingress.kubernetes.io/request-timeout: "300s"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: octobox-beta.octolab.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: octobox-beta-novnc
+                port:
+                  number: 6080
+  # NOTE: TLS not configured by default. To enable TLS:
+  # 1. Ensure cert-manager is installed and has a ClusterIssuer
+  # 2. Uncomment the tls section below and add cert-manager annotation
+  # tls:
+  #   - hosts:
+  #       - octobox-beta.octolab.local
+  #     secretName: octobox-beta-novnc-tls
+

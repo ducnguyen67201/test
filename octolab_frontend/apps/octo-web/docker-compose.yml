@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: octo-web-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: octo
+      POSTGRES_PASSWORD: octopass
+      POSTGRES_DB: octoweb
+    ports:
+      - "5433:5432"  # Using 5433 to avoid conflict with other postgres
+    volumes:
+      - octo-web-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U octo -d octoweb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  octo-web-postgres-data:
+    name: octo-web-postgres-data

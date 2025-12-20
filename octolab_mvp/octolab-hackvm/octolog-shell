@@ -1,0 +1,34 @@
+#!/bin/bash
+# octolog-shell: script-based session logger for OctoBox
+
+# Escape hatch to disable logging (for debugging)
+if [ -n "$OCTOLOG_DISABLE" ]; then
+  exec /bin/bash "$@"
+fi
+
+# Evidence volume is mounted here
+mkdir -p /evidence
+
+# Ensure we can write to /evidence
+if [ ! -w /evidence ]; then
+  # If we can't write, fall back to regular bash (but still try to log via PROMPT_COMMAND)
+  exec /bin/bash "$@"
+fi
+
+# Avoid recursion: inner shell must not re-enter this wrapper
+export OCTOLOG_DISABLE=1
+export SHELL=/bin/bash
+
+# Record the session using script command:
+# -q  : quiet (no "Script started/done" messages)
+# -f  : flush on each write (immediate write to disk)
+# -t  : write timing info to stderr (for scriptreplay)
+# typescript = /evidence/commands.log
+# timing     = /evidence/commands.time (via 2> redirection)
+# If script command fails, fall back to regular bash (PROMPT_COMMAND will handle logging)
+if command -v script >/dev/null 2>&1; then
+  exec script -q -f -t 2>/evidence/commands.time /evidence/commands.log
+else
+  # script command not available, use regular bash (PROMPT_COMMAND fallback will work)
+  exec /bin/bash "$@"
+fi

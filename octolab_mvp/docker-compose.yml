@@ -1,0 +1,60 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: octolab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: octolab
+      POSTGRES_PASSWORD: octolab_password
+      POSTGRES_DB: octolab
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Falco for syscall monitoring and evidence collection
+  # SECURITY: Runs privileged for kernel access; isolated on internal network
+  # Note: Falco is optional; omit for local dev without syscall monitoring
+  falco:
+    image: falcosecurity/falco:0.37.1
+    container_name: octolab-falco
+    restart: unless-stopped
+    privileged: true
+    pid: host
+    profiles:
+      - falco  # Only starts with: docker compose --profile falco up
+    volumes:
+      # Falco rules and config
+      - ./backend/falco/octolab_rules.yaml:/etc/falco/octolab_rules.yaml:ro
+      - ./backend/falco/falco.yaml.tmpl:/etc/falco/falco.yaml.tmpl:ro
+      - ./backend/falco/entrypoint.sh:/entrypoint.sh:ro
+      # Kernel access for syscall monitoring
+      - /var/run/docker.sock:/host/var/run/docker.sock:ro
+      - /dev:/host/dev:ro
+      - /proc:/host/proc:ro
+      - /boot:/host/boot:ro
+      - /lib/modules:/host/lib/modules:ro
+      - /usr:/host/usr:ro
+      - /etc:/host/etc:ro
+    environment:
+      # Backend URL for HTTP output
+      # For local dev with backend outside Docker: http://host.docker.internal:8000
+      BACKEND_URL: ${FALCO_BACKEND_URL:-http://host.docker.internal:8000}
+      # INTERNAL_TOKEN must be set via .env or docker-compose override
+      # SECURITY: Never commit actual token to version control
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+    entrypoint: ["/entrypoint.sh"]
+    networks:
+      - octolab-falco-internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  # Internal network for Falco: can reach host (for backend) but isolated
+  octolab-falco-internal:
+    driver: bridge
+
+volumes:
+  pgdata:

@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guac-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: guac-web
+  template:
+    metadata:
+      labels:
+        app: guac-web
+    spec:
+      initContainers:
+        - name: init-guac-db
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGHOST
+              value: guac-db
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: guac-db-secret
+                  key: database
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: guac-db-secret
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: guac-db-secret
+                  key: password
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              until pg_isready -h "$PGHOST" -U "$PGUSER" >/dev/null 2>&1; do
+                echo "Waiting for Postgres at ${PGHOST}..."
+                sleep 2
+              done
+              if ! psql -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='guacamole_user';" | grep -q 1; then
+                echo "Initializing Guacamole database schema..."
+                apk add --no-cache curl
+                curl -sL https://raw.githubusercontent.com/apache/guacamole-client/master/extensions/guacamole-auth-jdbc/modules/guacamole-auth-jdbc-postgresql/schema/001-create-schema.sql | psql
+                curl -sL https://raw.githubusercontent.com/apache/guacamole-client/master/extensions/guacamole-auth-jdbc/modules/guacamole-auth-jdbc-postgresql/schema/002-create-admin-user.sql | psql
+                echo "Guacamole schema initialized successfully."
+              else
+                echo "Guacamole schema already present, skipping init."
+              fi
+      containers:
+        - name: guac-web
+          image: guacamole/guacamole:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GUACD_HOSTNAME
+              value: guacd
+            - name: GUACD_PORT
+              value: "4822"
+            - name: POSTGRESQL_HOSTNAME
+              value: guac-db
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: guac-db-secret
+                  key: database
+            - name: POSTGRESQL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: guac-db-secret
+                  key: username
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: guac-db-secret
+                  key: password
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /guacamole/
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /guacamole/
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+

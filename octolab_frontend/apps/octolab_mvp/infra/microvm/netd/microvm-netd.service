@@ -1,0 +1,53 @@
+[Unit]
+Description=OctoLab MicroVM Network Daemon
+Documentation=https://github.com/octolab/octolab_mvp
+After=network.target
+Before=octolab-backend.service
+
+[Service]
+Type=simple
+
+# The service needs root to create bridges/TAPs
+# ExecStart path is templated - octolabctl install updates this
+ExecStart=/usr/bin/python3 /home/architect/octolab_mvp/infra/microvm/netd/microvm_netd.py
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Security hardening
+User=root
+Group=root
+NoNewPrivileges=false
+
+# Required capabilities for network operations
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+# Filesystem protection
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/octolab /var/lib/octolab
+PrivateTmp=true
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Runtime directory for socket
+RuntimeDirectory=octolab
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=restart
+
+# Socket permissions - group octolab can access
+ExecStartPost=/bin/bash -c 'sleep 0.5 && chgrp octolab /run/octolab/microvm-netd.sock 2>/dev/null || true'
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=microvm-netd
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

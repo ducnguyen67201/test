@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: octobox-beta-novnc
+spec:
+  podSelector:
+    matchLabels:
+      app: octobox-beta
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow ingress to noVNC port from Traefik ingress controller
+    # NOTE: k3s default flannel may not enforce NetworkPolicies.
+    # Primary containment is VNC bound to localhost inside the pod.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+          # Traefik typically runs in kube-system
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 6080
+  # Explicitly deny all other ingress (default behavior, but making it explicit)
+

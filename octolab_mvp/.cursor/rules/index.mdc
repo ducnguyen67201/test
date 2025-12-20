@@ -1,0 +1,214 @@
+---
+name: OctoLab Project Rules
+description: Core rules and context for CyberOctopusVN / OctoLab
+alwaysApply: true
+---
+
+# Project: CyberOctopusVN / OctoLab
+
+OctoLab is a **CVE rehearsal platform** for penetration testers and red teams.
+
+Users describe a real engagement scenario (e.g. vulnerable Apache or jQuery component), OctoLab spins up an isolated lab (attacker-box + vulnerable target), they rehearse payloads safely, and the platform generates an **evidence report** (commands, logs, summary) that can be shared with managers/clients.
+
+The goal is: **exploit rehearsal + evidence**, not generic training or safety guarantees for production.
+
+---
+
+## Tech Stack & Tools
+
+- Language: **Python 3.11**
+- Backend: **FastAPI**
+- ORM: **SQLAlchemy 2.x** (declarative with type hints)
+- Validation: **Pydantic v2**
+- DB: **PostgreSQL**
+- Migrations: **Alembic**
+- Infra: **Kubernetes**
+  - One namespace per lab
+  - NetworkPolicy isolation
+- Frontend: **React/Next + TypeScript** (priority is backend + lab orchestration first)
+
+When generating backend code, prefer:
+- Async FastAPI endpoints where reasonable.
+- SQLAlchemy 2.0 style `Mapped[...]` and `mapped_column`.
+- Pydantic v2 models for request/response schemas.
+
+---
+
+## Domain Model Overview
+
+Core concepts:
+
+- **User**
+  - Identified by UUID.
+  - Authenticated via email + password (hashed), later MFA/SSO.
+  - Owns many Labs.
+
+- **Recipe**
+  - Describes a vuln family & environment template (e.g. `apache_rce_2_4_18`, `jquery_2_2_1_xss`).
+  - Fields typically include: name, description, software, version_constraint, exploit_family, is_active, timestamps.
+  - Used by the backend to choose which lab image/config to deploy.
+
+- **Lab**
+  - Represents a single rehearsal environment for a user.
+  - Has:
+    - `id` (UUID)
+    - `owner_id` (User)
+    - `recipe_id` (Recipe)
+    - `status` ∈ {`requested`, `provisioning`, `ready`, `ending`, `finished`, `failed`}
+    - `requested_intent` (JSON from LLM: software, version, exploit_family, notes)
+    - Timestamps: created_at, updated_at, finished_at
+  - Each Lab corresponds to a **single k8s namespace** containing:
+    - `attacker-box` pod
+    - `target-app` pod(s)
+    - logging components
+
+---
+
+## Architecture Preferences
+
+**Folder conventions (backend):**
+
+- `app/main.py`  
+  - FastAPI app, router registration, startup/shutdown hooks.
+
+- `app/db.py`  
+  - Engine, session/async session, base metadata.
+
+- `app/models/`  
+  - SQLAlchemy models, one module per major entity (`user.py`, `lab.py`, `recipe.py`).
+  - Export them in `app/models/__init__.py`.
+
+- `app/schemas/`  
+  - Pydantic v2 models for API contracts (`user.py`, `lab.py`, `auth.py`, etc.).
+
+- `app/api/routes/`  
+  - FastAPI routers grouped by domain (`auth.py`, `labs.py`, `recipes.py`).
+
+- `app/services/`  
+  - Business logic and orchestration (lab lifecycle, recipe selection, evidence generation).
+
+**General rules:**
+
+- Keep routers thin; move complex logic into `services/`.
+- Use explicit dependencies instead of global state.
+- Use UUIDs for primary keys.
+- Prefer smaller, composable functions over large ones.
+
+---
+
+## Security & Multi-Tenancy
+
+This is a **multi-tenant security product**. Security and isolation are non-negotiable.
+
+When generating or modifying code:
+
+1. **Tenant isolation**
+   - All Lab queries exposed to users **must** be filtered by `owner_id = current_user.id`.
+   - If a lab is not owned by the current user, return HTTP 404 (not 403) to avoid leaking its existence.
+   - Do not add endpoints that list “all labs” unless they are clearly admin-only and behind explicit checks.
+
+2. **Authentication**
+   - All lab-related endpoints require authentication.
+   - Do not create unauthenticated lab or recipe modification endpoints.
+
+3. **IDs & exposure**
+   - Use UUIDs for `User`, `Lab`, `Recipe` IDs.
+   - Never rely on guessable integer IDs.
+   - Avoid logging sensitive secrets (password hashes, tokens).
+
+4. **Kubernetes isolation (conceptual)**
+   - Each Lab maps to a dedicated namespace (e.g. `lab-{uuid}`).
+   - NetworkPolicies:
+     - Attacker-box can only talk to:
+       - its own target-app service(s)
+       - any required logging/metrics endpoints
+     - No outbound Internet or cross-namespace traffic by default.
+   - Do **not** assume host access; labs should never be able to reach the control plane or other tenants.
+
+5. **Attacker mindset**
+   - When adding features that expose shell, logs, or LLM tools, prefer the safest interpretation:
+     - Validate inputs.
+     - Avoid server-side command injection patterns.
+     - Clearly separate “untrusted user commands” from system commands.
+
+---
+
+## Lab Lifecycle
+
+Standard Lab statuses:
+
+- `requested`   – user requested a lab; DB row created.
+- `provisioning` – orchestrator is preparing k8s resources.
+- `ready`       – lab is usable (attacker-box & target-app running).
+- `ending`      – user requested end, or TTL reached.
+- `finished`    – lab successfully torn down and logs archived.
+- `failed`      – provisioning or teardown failed; error recorded.
+
+When writing orchestration logic:
+
+- Transitions must be explicit and persisted.
+- Handle partial failures gracefully; never leave Labs in undefined states.
+- Do **not** perform expensive or blocking work directly in HTTP request handlers; use background tasks or workers.
+
+---
+
+## Evidence & Logging
+
+Each Lab should produce an **evidence bundle** that may include:
+
+- Attacker-box shell transcript (e.g. `tty.log`).
+- Target-app logs (e.g. Apache access/error logs).
+- Metadata: user, timestamps, recipe, software/version, exploit_family.
+- Optional LLM-generated summary.
+
+Rules for code touching evidence:
+
+- Always associate logs and evidence with the correct Lab ID.
+- Never expose logs from a Lab to a different user.
+- Keep evidence formats simple (text/JSON/Markdown/HTML); PDF export can come later.
+
+---
+
+## AI / LLM Usage
+
+OctoLab uses LLMs for:
+
+- Intent parsing: user scenario → structured fields (`software`, `version`, `exploit_family`, `notes`).
+- Explanation: optional helper to explain CVEs or logs.
+- Summarisation: converting evidence into human-readable summaries.
+
+When generating code around LLMs:
+
+- Use a dedicated adapter layer (e.g. `app/services/llm_adapter.py`).
+- Expect failures/timeouts and handle them gracefully.
+- Do not hardcode a specific LLM provider; keep it pluggable via config.
+
+---
+
+## Testing & Quality
+
+- For non-trivial logic (lab lifecycle, recipe selection, permission checks), prefer to add unit tests or at least TODOs for tests.
+- When fixing bugs, add a short comment or docstring explaining the root cause if not obvious.
+- Keep FastAPI endpoints small enough that behavior is understandable and testable.
+
+---
+
+## Agent / Plan / Ask Behavior
+
+For Cursor’s Agent and Plan modes in this repo:
+
+- **Always** respect these project rules when generating or refactoring code.
+- Prefer to:
+  - Propose a **plan** (Markdown) for complex tasks before making large edits.
+  - Work in small iterations (models → schemas → routers → services → tests).
+
+Safety constraints for Agent:
+
+- Do **not** add or run destructive commands such as `rm -rf`, `docker system prune`, or unscoped `kubectl` commands unless explicitly requested by the user.
+- It’s safe to run:
+  - `pytest` / `uv run pytest`
+  - `alembic upgrade head`
+  - `uvicorn app.main:app --reload` (or equivalent dev server command)
+- Avoid creating or modifying production deployment configs without clear instructions.
+
+When unsure between security and convenience, **choose security** and ask for clarification in the prompt.
