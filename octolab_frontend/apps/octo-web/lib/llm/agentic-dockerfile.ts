@@ -67,6 +67,7 @@ export async function generateDockerfileAgentic(
 
   let lastDockerfile = "";
   let lastError = "";
+  let lastSourceFiles: Array<{ filename: string; content: string }> = [];
   let lastResult: GenerationAttempt | null = null;
 
   console.log(`[Agentic] Starting generation for ${cveId}, max ${maxIter} iterations`);
@@ -75,8 +76,17 @@ export async function generateDockerfileAgentic(
     console.log(`[Agentic] Attempt ${attempt}/${maxIter} for ${cveId}`);
 
     // 1. Generate or fix Dockerfile
-    const result = await generateOrFix(llm, cveId, metadata, lastDockerfile, lastError);
+    const result = await generateOrFix(
+      llm,
+      cveId,
+      metadata,
+      lastDockerfile,
+      lastError,
+      lastSourceFiles,
+      attempt
+    );
     lastDockerfile = result.dockerfile;
+    lastSourceFiles = result.sourceFiles;
     lastResult = result;
 
     // Check confidence - if very low, might want to bail early
@@ -175,6 +185,198 @@ export async function generateDockerfileAgentic(
   throw new Error(`Failed to generate Dockerfile for ${cveId}`);
 }
 
+interface ErrorAnalysis {
+  summary: string;
+  category: "BUILD_ERROR" | "RUNTIME_ERROR" | "VALIDATION_ERROR" | "NETWORK_ERROR" | "UNKNOWN";
+  location: string;
+  rootCause: string;
+  actionItems: string[];
+}
+
+/**
+ * Analyze the error to provide structured feedback to the LLM
+ */
+function analyzeError(
+  error: string,
+  dockerfile: string,
+  sourceFiles: Array<{ filename: string; content: string }>
+): ErrorAnalysis {
+  const errorLower = error.toLowerCase();
+  const dockerfileLines = dockerfile.split("\n");
+
+  // Default analysis
+  let analysis: ErrorAnalysis = {
+    summary: "Unknown error occurred during build or runtime",
+    category: "UNKNOWN",
+    location: "Unable to determine",
+    rootCause: "Error pattern not recognized",
+    actionItems: ["Review the raw error output", "Try a different approach"],
+  };
+
+  // === BUILD ERRORS ===
+
+  // Package not found
+  if (errorLower.includes("package") && (errorLower.includes("not found") || errorLower.includes("no such"))) {
+    const packageMatch = error.match(/(?:package|unable to locate package)\s+['"]?([^\s'"]+)/i);
+    analysis = {
+      summary: `Package installation failed: ${packageMatch?.[1] || "unknown package"}`,
+      category: "BUILD_ERROR",
+      location: "Dockerfile RUN command (apt-get/apk/yum install)",
+      rootCause: "The specified package name doesn't exist in the package repository, or the repository is not available in the base image",
+      actionItems: [
+        packageMatch?.[1] ? `Remove or replace package "${packageMatch[1]}" with correct package name` : "Check package names",
+        "Verify the base image has the correct package repositories",
+        "Try using a different base image that includes this package",
+        "Search for alternative package names (e.g., libfoo-dev vs foo-devel)",
+      ],
+    };
+  }
+
+  // COPY failed - file not found
+  else if (errorLower.includes("copy") && (errorLower.includes("not found") || errorLower.includes("no such file"))) {
+    const copyMatch = error.match(/COPY.*?(\S+)/i) || dockerfile.match(/COPY\s+(\S+)/);
+    const missingFile = copyMatch?.[1];
+    const fileInSourceFiles = sourceFiles.some((sf) => sf.filename === missingFile);
+
+    analysis = {
+      summary: `COPY failed: File "${missingFile || "unknown"}" not found in build context`,
+      category: "BUILD_ERROR",
+      location: `Dockerfile COPY command${missingFile ? ` referencing "${missingFile}"` : ""}`,
+      rootCause: fileInSourceFiles
+        ? "File exists in sourceFiles but path doesn't match COPY command"
+        : "File referenced in COPY is not included in sourceFiles array",
+      actionItems: [
+        missingFile && !fileInSourceFiles
+          ? `Add "${missingFile}" to the sourceFiles array with its content`
+          : `Fix the path in COPY to match sourceFiles filename`,
+        "Ensure filename in sourceFiles matches exactly what COPY expects",
+        "Check for typos in filename",
+      ],
+    };
+  }
+
+  // Base image not found
+  else if (errorLower.includes("manifest") || (errorLower.includes("pull") && errorLower.includes("not found"))) {
+    const fromLine = dockerfileLines.find((l) => l.trim().startsWith("FROM"));
+    const imageMatch = fromLine?.match(/FROM\s+(\S+)/);
+
+    analysis = {
+      summary: `Base image not found: ${imageMatch?.[1] || "unknown"}`,
+      category: "BUILD_ERROR",
+      location: `Dockerfile FROM line: "${fromLine?.trim() || "not found"}"`,
+      rootCause: "The specified Docker image:tag doesn't exist on Docker Hub or the registry",
+      actionItems: [
+        "Check Docker Hub for available tags of this image",
+        imageMatch?.[1]?.includes(":") ? "Try a different version tag" : "Add a specific version tag (don't use :latest for vulnerable versions)",
+        "Use an alternative base image that provides similar functionality",
+      ],
+    };
+  }
+
+  // Command failed during RUN
+  else if (errorLower.includes("returned a non-zero code") || errorLower.includes("exit code")) {
+    const exitCodeMatch = error.match(/(?:exit code|returned a non-zero code)[:\s]*(\d+)/i);
+    const failedCommand = error.match(/RUN\s+(.+?)(?:\s+#|$)/m)?.[1];
+
+    analysis = {
+      summary: `Command failed with exit code ${exitCodeMatch?.[1] || "non-zero"}`,
+      category: "BUILD_ERROR",
+      location: `Dockerfile RUN command${failedCommand ? `: "${failedCommand.slice(0, 50)}..."` : ""}`,
+      rootCause: "A shell command in the Dockerfile failed during build",
+      actionItems: [
+        "Check if the command syntax is correct",
+        "Verify required dependencies are installed before this command",
+        "Check if URLs in wget/curl commands are valid and accessible",
+        "Consider breaking complex RUN commands into smaller steps for better error isolation",
+      ],
+    };
+  }
+
+  // === RUNTIME ERRORS ===
+
+  // Container exited immediately
+  else if (errorLower.includes("exited") || errorLower.includes("crash") || errorLower.includes("restart")) {
+    const cmdLine = dockerfileLines.find((l) => l.trim().startsWith("CMD") || l.trim().startsWith("ENTRYPOINT"));
+
+    analysis = {
+      summary: "Container crashed or exited immediately after starting",
+      category: "RUNTIME_ERROR",
+      location: `Dockerfile CMD/ENTRYPOINT: "${cmdLine?.trim() || "not specified"}"`,
+      rootCause: "The main process exited, likely due to missing dependencies, configuration errors, or the service failing to start",
+      actionItems: [
+        "Verify the CMD/ENTRYPOINT command is correct",
+        "Ensure all required config files exist and are valid",
+        "Check if the service requires specific environment variables",
+        "Add a HEALTHCHECK to debug startup issues",
+        "Try running the container interactively to see error output",
+      ],
+    };
+  }
+
+  // Service not listening / connection refused
+  else if (errorLower.includes("connection refused") || errorLower.includes("not listening")) {
+    const exposeLine = dockerfileLines.find((l) => l.trim().startsWith("EXPOSE"));
+
+    analysis = {
+      summary: "Service not listening on expected port",
+      category: "RUNTIME_ERROR",
+      location: `Exposed ports: ${exposeLine?.trim() || "none specified"}`,
+      rootCause: "The service started but isn't listening on the expected port, or wrong port is exposed",
+      actionItems: [
+        "Verify EXPOSE matches the port the service actually listens on",
+        "Check service configuration for correct bind address (0.0.0.0, not 127.0.0.1)",
+        "Ensure service has time to start before health check runs",
+        "Verify the service config file is correct",
+      ],
+    };
+  }
+
+  // === VALIDATION ERRORS ===
+
+  else if (errorLower.includes("validation") || errorLower.includes("syntax")) {
+    analysis = {
+      summary: "Dockerfile syntax or validation error",
+      category: "VALIDATION_ERROR",
+      location: "Dockerfile syntax",
+      rootCause: "The Dockerfile has syntax errors or invalid instructions",
+      actionItems: [
+        "Check for missing backslashes in multi-line RUN commands",
+        "Verify all instructions are valid Dockerfile commands",
+        "Ensure proper quoting in shell commands",
+        "Check for invalid characters or encoding issues",
+      ],
+    };
+  }
+
+  // === NETWORK ERRORS ===
+
+  else if (errorLower.includes("timeout") || errorLower.includes("network") || errorLower.includes("could not resolve")) {
+    analysis = {
+      summary: "Network error during build",
+      category: "NETWORK_ERROR",
+      location: "Dockerfile commands that fetch external resources",
+      rootCause: "Failed to download packages or files due to network issues or invalid URLs",
+      actionItems: [
+        "Verify URLs in wget/curl commands are correct and accessible",
+        "Check if package repositories are reachable",
+        "Consider using a mirror or alternative download source",
+        "Try a different base image with packages pre-installed",
+      ],
+    };
+  }
+
+  // Highlight which source file might be problematic
+  if (sourceFiles.length > 0 && (errorLower.includes("syntax error") || errorLower.includes("parse error"))) {
+    const fileMatch = error.match(/(?:in|file)\s+['"]?([^\s'"]+\.(java|py|js|php|sh|conf))/i);
+    if (fileMatch) {
+      analysis.location = `Source file: ${fileMatch[1]}`;
+      analysis.actionItems.unshift(`Fix syntax error in ${fileMatch[1]}`);
+    }
+  }
+
+  return analysis;
+}
+
 /**
  * Generate a new Dockerfile or fix a previous attempt based on error feedback
  */
@@ -183,7 +385,9 @@ async function generateOrFix(
   cveId: string,
   metadata: NVDMetadata | null,
   previousDockerfile: string,
-  previousError: string
+  previousError: string,
+  previousSourceFiles: Array<{ filename: string; content: string }>,
+  attemptNumber: number
 ): Promise<GenerationAttempt> {
   let userPrompt = `Generate a Dockerfile for ${cveId}.
 
@@ -207,20 +411,45 @@ ${metadata.references?.slice(0, 3).join("\n") || "None"}
 
   // Add error context if this is a retry
   if (previousError && previousDockerfile) {
-    userPrompt += `=== PREVIOUS ATTEMPT FAILED ===
-Error: ${previousError}
+    const errorAnalysis = analyzeError(previousError, previousDockerfile, previousSourceFiles);
 
-Previous Dockerfile that failed:
+    userPrompt += `=== PREVIOUS ATTEMPT FAILED (Attempt ${attemptNumber - 1}) ===
+
+## Error Summary
+${errorAnalysis.summary}
+
+## Error Category
+${errorAnalysis.category}
+
+## Error Location
+${errorAnalysis.location}
+
+## Raw Error Output
+\`\`\`
+${previousError}
+\`\`\`
+
+## Root Cause Analysis
+${errorAnalysis.rootCause}
+
+## What You Must Fix
+${errorAnalysis.actionItems.map((item, i) => `${i + 1}. ${item}`).join("\n")}
+
+## Previous Dockerfile That Failed
 \`\`\`dockerfile
 ${previousDockerfile}
 \`\`\`
+${previousSourceFiles.length > 0 ? `
+## Previous Source Files
+${previousSourceFiles.map((sf) => `### ${sf.filename}\n\`\`\`\n${sf.content.slice(0, 500)}${sf.content.length > 500 ? "\n... (truncated)" : ""}\n\`\`\``).join("\n\n")}
+` : ""}
 
-IMPORTANT: Fix the specific error above. The previous Dockerfile did not work.
-Common fixes:
-- If a package/version doesn't exist, find an alternative or different version
-- If COPY fails, ensure the file is in sourceFiles
-- If service doesn't start, check entrypoint/CMD and dependencies
-- If build times out, simplify the build steps
+## CRITICAL INSTRUCTIONS
+- DO NOT repeat the same mistake. The previous approach failed.
+- If a package/version doesn't exist, use a DIFFERENT version or approach.
+- If a file COPY failed, ensure the file is in sourceFiles array.
+- If the same error occurs twice, try a COMPLETELY different base image or approach.
+- Focus on the specific error above - don't change unrelated parts.
 
 `;
   }
