@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: octobox-beta-novnc
+spec:
+  type: ClusterIP
+  selector:
+    app: octobox-beta
+  ports:
+    - name: novnc
+      port: 6080
+      targetPort: 6080
+      protocol: TCP
+  # NOTE: VNC port 5900 is NOT exposed via this Service.
+  # VNC is bound to localhost inside the pod and only accessible via the noVNC sidecar.
+

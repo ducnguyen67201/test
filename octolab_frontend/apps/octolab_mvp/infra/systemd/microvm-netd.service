@@ -1,0 +1,21 @@
+[Unit]
+Description=OctoLab MicroVM Network Daemon
+Documentation=https://github.com/your-org/octolab/docs/architecture/microvm.md
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/microvm-netd
+Restart=on-failure
+RestartSec=5
+
+# Run as root (required for CAP_NET_ADMIN)
+User=root
+Group=root
+
+# Runtime directory for socket
+RuntimeDirectory=octolab
+RuntimeDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target

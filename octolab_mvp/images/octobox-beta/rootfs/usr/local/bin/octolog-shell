@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# octolog-shell: script-based session logger for OctoBox Beta
+
+set -e
+
+# Escape hatch to disable logging (for debugging or nested shells)
+if [ -n "${OCTOLOG_DISABLE:-}" ]; then
+  exec /bin/bash "$@"
+fi
+
+LOG_DIR="/evidence"
+
+# Ensure evidence directory exists
+mkdir -p "${LOG_DIR}"
+
+# If we cannot write to /evidence, fall back to normal bash
+if [ ! -w "${LOG_DIR}" ]; then
+  echo "Warning: ${LOG_DIR} is not writable, falling back to regular bash" >&2
+  exec /bin/bash "$@"
+fi
+
+# Prevent recursion and ensure inner shell is bash
+export OCTOLOG_DISABLE=1
+export SHELL=/bin/bash
+
+# If script is available, use it to record the session
+if command -v script >/dev/null 2>&1; then
+  exec script \
+    -q \
+    -f \
+    -t 2>"${LOG_DIR}/commands.time" \
+    "${LOG_DIR}/commands.log"
+fi
+
+# Fallback if script is missing
+echo "Warning: 'script' command not available, using regular bash" >&2
+exec /bin/bash "$@"
+

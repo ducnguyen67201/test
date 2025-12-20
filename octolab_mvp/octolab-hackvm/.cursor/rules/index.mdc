@@ -1,0 +1,229 @@
+---
+description: >
+  Core security and architecture rules for the OctoLab HackVM (Kali-based
+  attack box running in Docker on Windows via Docker Desktop).
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# OctoLab HackVM – Core Rules
+
+## Purpose
+
+- This project defines the **HackVM** for OctoLab: a Kali-based, browser-accessible
+  attack box exposed via noVNC on port 8080.
+- It is **infra-only**: no FastAPI, DB models, or orchestrator business logic.
+  Those live in the main backend repo.
+
+## Security Constraints (MUST FOLLOW)
+
+- Do **NOT** use `--privileged` on any container.
+- Do **NOT** mount the Docker socket (no `/var/run/docker.sock`).
+- Do **NOT** mount arbitrary host directories; use named volumes only
+  (e.g. `hackvm_home` for `/home/pentester`).
+- Containers must run as a **non-root** user by default (e.g. `pentester`).
+- Only expose the minimal required ports:
+  - 8080 → noVNC web UI.
+- Attach HackVM services to a **bridge network** (e.g. `hackvm_dev_net` now,
+  per-lab networks later).
+
+If any change requires relaxing these constraints, explain the tradeoff in
+comments and keep the change as small as possible.
+
+## Files and Responsibilities
+
+- `Dockerfile`
+  - Base image: `kalilinux/kali-rolling`.
+  - Installs lightweight desktop + VNC + noVNC + basic tools (`nmap`, `curl`,
+    `git`, `vim`, etc).
+  - Creates non-root user `pentester` and sets home to `/home/pentester`.
+  - Copies and `chmod +x` the startup script.
+  - Exposes port 8080.
+  - Ends with `USER pentester`.
+
+- `startup.sh`
+  - Runs **inside the Linux container**.
+  - Starts VNC server for `pentester`.
+  - noVNC MUST NOT use port 8080 inside the HackVM; reserve 8080 for user tools. Use 6080 for noVNC.
+  - Keeps the container running (no PowerShell here; this is bash).
+
+- `docker-compose.yml`
+  - For local Windows dev with Docker Desktop.
+  - Builds from the local Dockerfile as service `kali-hackvm`.
+  - Maps `8080:8080` (host → container).
+  - Uses named volume `hackvm_home` → `/home/pentester`.
+  - Attaches service to `hackvm_dev_net` bridge network.
+  - Must not use privileged mode or host mounts.
+
+## Interaction with Backend
+
+- This repo is only for the HackVM image and local dev wiring.
+- Orchestrator logic (spawning per-lab HackVM instances) lives in the backend repo.
+- Do not add backend API code here; instead, expose stable image + configs that
+  the backend can orchestrate via Docker/Kubernetes.
+
+## Phase 1 – Lab Design Invariants (do not break these)
+
+These are non-negotiable “engine” rules for how labs are wired and secured.  
+Cursor: treat these as hard constraints when proposing Docker Compose, KVM, networking, or security changes.
+
+### 1. Network topology per lab (two segments only)
+
+For every lab, always model the network as **two logical segments**:
+
+- `lab_net` – internal lab segment
+  - Contains:
+    - `OctoBox` (attacker box)
+    - All lab targets
+    - LabGateway LAN NIC
+  - Only traffic between lab components flows here.
+
+- `egress_net` – uplink segment
+  - Contains:
+    - LabGateway WAN NIC
+    - “Rest of world” (host NAT / upstream internet)
+  - Only LabGateway is allowed to bridge between `lab_net` and `egress_net`.
+
+Implementation pattern (keep the abstraction, change the plumbing):
+
+- **Docker (current MVP)**
+  - Use **two bridge networks**:
+    - `lab_net` Docker bridge for OctoBox + targets + LabGateway LAN
+    - `egress_net` Docker bridge for LabGateway WAN → host NAT
+- **KVM (later)**
+  - Use **two Linux bridges**:
+    - `lab_br0` (lab_net)
+    - `egress_br0` (egress_net)
+
+Non-negotiables:
+
+- Never collapse everything into a single network.
+- Never place targets or OctoBox directly on `egress_net`.
+- All lab traffic to/from the outside world must traverse LabGateway.
+
+---
+
+### 2. Evidence isolation (pcap handling)
+
+Goal: Only LabGateway can see and write raw network evidence.
+
+Capture rules:
+
+- Only **LabGateway** runs `tcpdump` or similar capture tools.
+- Minimum requirement:
+  - Capture on **LAN side** (lab_net).
+  - Optionally capture on WAN later, but keep the same isolation pattern.
+
+Filesystem rules:
+
+- All capture output goes to **`/pcap` inside LabGateway**.
+- `/pcap`:
+  - MUST NOT be mounted into `OctoBox`.
+  - MUST NOT be mounted into any target container/VM.
+  - MUST NOT be exposed directly as a bind-mount to the host in userland paths.
+
+User access pattern:
+
+- Users **never** get direct filesystem access to `/pcap`.
+- The only allowed UX is:
+  - LabGateway exports an **evidence bundle** (e.g., tar/zip) **after** the lab run,
+  - which is then made available for download or post-processing.
+- Cursor: when generating Docker Compose or future KVM definitions, do **not** add host or OctoBox mounts for `/pcap`. Keep it internal to LabGateway and model export as a separate step/tool.
+
+---
+
+### 3. Security constraints per role
+
+Treat these as hard constraints for container/VM definitions and Compose files.
+
+#### 3.1 OctoBox (attacker / pentester box)
+
+- Runs as a **non-root user inside the container/VM**.
+- MUST NOT be started with `--privileged`.
+- Capabilities:
+  - Do not add extra Linux capabilities unless explicitly required by a lab.
+- Networking:
+  - Attached only to `lab_net`.
+  - No direct attachment to `egress_net`.
+- Ports:
+  - Only exposed port is **6080/TCP** for noVNC (or the chosen web console).
+  - Do not expose SSH or other management ports to the host unless explicitly specified by a lab design.
+
+#### 3.2 LabGateway (router / firewall / capture box)
+
+- May run as **root** (required for iptables/nftables and tcpdump).
+- Capabilities:
+  - Use **only**:
+    - `NET_ADMIN`
+    - `NET_RAW`
+  - Example (Docker Compose):
+    - `cap_add: [ "NET_ADMIN", "NET_RAW" ]`
+- MUST NOT use `--privileged` or equivalent full-privilege flags.
+- Networking:
+  - Has exactly two NICs:
+    - One on `lab_net` (LAN side).
+    - One on `egress_net` (WAN/uplink side).
+  - All routing, NAT, and firewalling happens here.
+- Evidence:
+  - Responsible for all `tcpdump` or similar capture commands.
+  - Sole owner of `/pcap` as described above.
+
+#### 3.3 Targets (vulnerable services)
+
+- Plain application containers/VMs (e.g., httpd, database, etc.).
+- Networking:
+  - Attached **only** to `lab_net`.
+  - MUST NOT have host-mapped ports (no `ports:` section in Docker Compose) unless a very specific lab design calls for it.
+  - Access to targets should normally be via OctoBox → lab_net, not directly from the host.
+- Privileges:
+  - Run as minimally privileged as is compatible with the exploit scenario.
+  - Do not use `--privileged` or excessive capabilities unless explicitly required by a specific CVE lab.
+
+---
+
+### 4. Mental model for future migrations
+
+When proposing changes (Docker today, KVM tomorrow), Cursor should:
+
+- Preserve the **two-network model** (`lab_net` / `egress_net`).
+- Preserve **evidence isolation** (only LabGateway captures; `/pcap` stays internal).
+- Preserve **role-based security constraints**:
+  - OctoBox: non-root, no `--privileged`, only 6080 exposed.
+  - LabGateway: root is allowed, but only `NET_ADMIN` + `NET_RAW`, no `--privileged`.
+  - Targets: no host ports, lab_net-only.
+
+These three invariants are the reusable engine of the platform.  
+Any refactor (Docker → KVM, network stack changes, etc.) must keep them intact.
+
+## Shell & logging constraints (temporary, but strict)
+
+Until we explicitly say otherwise:
+
+- Do **not** modify or hook into interactive shell startup for HackVM / OctoBox images.
+- Do **not**:
+  - set or change `PROMPT_COMMAND`
+  - add `trap` handlers (including DEBUG traps)
+  - edit `/etc/profile`, `/etc/bash.bashrc`, user `.bashrc`, or `.bash_profile` for logging
+  - inject command-logging logic into Bash, Zsh, or other shells
+
+For **Kali HackVM / OctoBox Dockerfiles**:
+
+- Keep shell startup as simple as possible. Only do what is needed to:
+  - start the desktop environment,
+  - start VNC and noVNC,
+  - configure the pentester user.
+- Do **not** add:
+  - Bash command logging,
+  - history scraping,
+  - auditd rules,
+  - eBPF/ptrace hooks,
+  - or any other command-recording mechanism.
+
+Command logging design:
+
+- Treat command logging as a **separate subsystem** implemented later using a dedicated tool or Python binary (e.g., PTY wrapper, audit pipeline).
+- The current images should assume that **/evidence/commands.log is managed elsewhere**, or not used at all.
+- If asked to “add logging” now, respond by:
+  - describing high-level options (auditd, script(1), Python PTY wrapper, etc.),
+  - but **do not** modify Dockerfiles or shell startup configs without an explicit override of this rule.

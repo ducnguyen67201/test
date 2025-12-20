@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package labs.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// LabsService provides lab mutation operations for Temporal activities
+// All mutations are called via gRPC from apps/queue workflows
+service LabsService {
+  // UpdateLabStatus updates the status of a lab (queued, running, completed, rejected, etc.)
+  rpc UpdateLabStatus(UpdateLabStatusRequest) returns (UpdateLabStatusResponse);
+
+  // UpdateLabBlueprint updates the blueprint field after generation
+  rpc UpdateLabBlueprint(UpdateLabBlueprintRequest) returns (UpdateLabBlueprintResponse);
+
+  // UpdateLabWorkflowIDs stores the Temporal workflow ID and run ID
+  rpc UpdateLabWorkflowIDs(UpdateLabWorkflowIDsRequest) returns (UpdateLabWorkflowIDsResponse);
+
+  // UpdateLabProvisioningDetails updates provisioning metadata (environment details, IPs, etc.)
+  rpc UpdateLabProvisioningDetails(UpdateLabProvisioningDetailsRequest) returns (UpdateLabProvisioningDetailsResponse);
+
+  // GenerateBlueprint triggers blueprint generation for a lab
+  rpc GenerateBlueprint(GenerateBlueprintRequest) returns (GenerateBlueprintResponse);
+
+  // GetLab retrieves lab details (read-only for activities)
+  rpc GetLab(GetLabRequest) returns (GetLabResponse);
+}
+
+// Lab represents a lab request
+message Lab {
+  string id = 1;
+  string user_id = 2;
+  string cve_id = 3;
+  string severity = 4;
+  string status = 5;
+  int32 ttl_hours = 6;
+  string justification = 7;
+  google.protobuf.Struct blueprint = 8;
+  google.protobuf.Struct guardrail_snapshot = 9;
+  google.protobuf.Struct provisioning_details = 10;
+  optional string workflow_id = 11;
+  optional string run_id = 12;
+  google.protobuf.Timestamp expires_at = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+// Blueprint represents the generated lab environment plan
+message Blueprint {
+  string summary = 1;
+  string risk_badge = 2;
+  google.protobuf.Struct environment_plan = 3;
+  repeated string validation_steps = 4;
+  google.protobuf.Struct automation_hooks = 5;
+}
+
+// UpdateLabStatus request/response
+message UpdateLabStatusRequest {
+  string lab_id = 1;
+  string status = 2;
+  optional string notes = 3;
+}
+
+message UpdateLabStatusResponse {
+  bool success = 1;
+  Lab lab = 2;
+}
+
+// UpdateLabBlueprint request/response
+message UpdateLabBlueprintRequest {
+  string lab_id = 1;
+  Blueprint blueprint = 2;
+}
+
+message UpdateLabBlueprintResponse {
+  bool success = 1;
+  Lab lab = 2;
+}
+
+// UpdateLabWorkflowIDs request/response
+message UpdateLabWorkflowIDsRequest {
+  string lab_id = 1;
+  string workflow_id = 2;
+  string run_id = 3;
+}
+
+message UpdateLabWorkflowIDsResponse {
+  bool success = 1;
+  Lab lab = 2;
+}
+
+// UpdateLabProvisioningDetails request/response
+message UpdateLabProvisioningDetailsRequest {
+  string lab_id = 1;
+  google.protobuf.Struct details = 2;
+}
+
+message UpdateLabProvisioningDetailsResponse {
+  bool success = 1;
+  Lab lab = 2;
+}
+
+// GenerateBlueprint request/response
+message GenerateBlueprintRequest {
+  string lab_id = 1;
+}
+
+message GenerateBlueprintResponse {
+  bool success = 1;
+  Blueprint blueprint = 2;
+}
+
+// GetLab request/response (read-only)
+message GetLabRequest {
+  string lab_id = 1;
+}
+
+message GetLabResponse {
+  Lab lab = 1;
+}

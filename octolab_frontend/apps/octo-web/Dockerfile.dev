@@ -1,0 +1,26 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies for native modules
+RUN apk add --no-cache libc6-compat
+
+# Copy package files from monorepo root
+COPY package.json package-lock.json* ./
+COPY apps/octo-web/package.json ./apps/octo-web/
+
+# Install dependencies
+RUN npm install
+
+# Copy the app source
+COPY apps/octo-web ./apps/octo-web
+COPY packages ./packages
+
+WORKDIR /app/apps/octo-web
+
+EXPOSE 3000
+
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3000"]

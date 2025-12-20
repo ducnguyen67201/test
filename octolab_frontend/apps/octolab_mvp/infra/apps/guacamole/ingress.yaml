@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: guac
+  annotations:
+    cert-manager.io/cluster-issuer: self-signed
+    traefik.ingress.kubernetes.io/service-upgrade: "websocket"
+    traefik.ingress.kubernetes.io/request-timeout: "300s"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - guac.octolab.local
+      secretName: guac-tls
+  rules:
+    - host: guac.octolab.local
+      http:
+        paths:
+          - path: /guacamole
+            pathType: Prefix
+            backend:
+              service:
+                name: guac-web
+                port:
+                  number: 8080
+

@@ -1,0 +1,32 @@
+---
+# Default Deny Network Policy for octolab-labs namespace
+#
+# Security-first design: deny all ingress and egress traffic by default.
+# Specific allow rules must be added for required communication.
+#
+# This prevents lab containers from:
+# - Accessing other labs (tenant isolation)
+# - Accessing system services without explicit permission
+# - Reaching external networks without explicit permission
+#
+# Apply after creating the octolab-labs namespace.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: octolab-labs
+  labels:
+    app.octolab.io/component: security
+    app.octolab.io/managed-by: platform
+spec:
+  # Apply to all pods in the namespace
+  podSelector: {}
+
+  # Deny all traffic types by default
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Empty ingress/egress rules = deny all
+  # (explicit allows must be added via additional NetworkPolicies)

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package test; 
+
+import "google/protobuf/timestamp.proto";
+
+// TestMessage is a sample message for testing
+message TestMessage {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message GetTestMessageRequest {
+  string id = 1;
+}
+
+message GetTestMessageResponse {
+  TestMessage message = 1;
+}
+
+// TestService provides test-related operations
+service TestService {
+  // GetTestMessage retrieves a TestMessage by ID
+  rpc GetTestMessage(GetTestMessageRequest) returns (GetTestMessageResponse);
+}

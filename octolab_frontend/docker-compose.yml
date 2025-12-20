@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zerozero-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: zerozero
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: zerozero-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Note: API service configuration (ports 8080 for HTTP, 50051 for gRPC)
+  # Run manually: cd apps/api && go run cmd/server/main.go (HTTP)
+  # Run manually: cd apps/api && go run cmd/grpc/main.go (gRPC)
+  # Ports 8080 and 50051 are available for local development
+
+  temporal:
+    image: temporalio/auto-setup:1.29.1
+    container_name: zerozero-temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7233:7233"
+    environment:
+      DB: postgres12_pgx
+      DB_PORT: 5432
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: postgres
+
+  temporal-ui:
+    image: temporalio/ui:2.33.0
+    container_name: zerozero-temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_UI_PORT: 8080
+    ports:
+      - "8233:8080"
+
+  temporal-admin:
+    image: temporalio/admin-tools:latest
+    container_name: zerozero-temporal-admin
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    command: ["sh", "-c", "sleep infinity"]
+
+volumes:
+  postgres-data:
+  redis-data:

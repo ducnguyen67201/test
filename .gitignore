@@ -1,0 +1,6 @@
+*.ext4
+*.img
+*.ext4
+*.img
+*.qcow2
+node_modules/

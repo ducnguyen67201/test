@@ -1,0 +1,41 @@
+# Basic Traefik configuration for OctoLab dev cluster.
+# This is intentionally minimal; we will refine as we add Guacamole and backend services.
+
+# Ingress class configuration
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+  name: traefik
+
+# Ports configuration
+ports:
+  web:
+    port: 80
+    expose: true
+    exposedPort: 80
+    protocol: TCP
+  websecure:
+    port: 443
+    expose: true
+    exposedPort: 443
+    protocol: TCP
+
+# Logging configuration
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true
+
+# Enable dashboard (for debugging; disable in production)
+# Access via: kubectl port-forward -n kube-system svc/traefik 9000:9000
+# Then visit: http://localhost:9000/dashboard/
+api:
+  dashboard: true
+  insecure: false
+
+# Additional options for future refinement:
+# - HTTP -> HTTPS redirection middleware
+# - WebSocket support (enabled by default in Traefik)
+# - Request size limits for Guacamole
+

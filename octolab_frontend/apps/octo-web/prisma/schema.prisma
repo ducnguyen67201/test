@@ -1,0 +1,198 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  isSystemAdmin Boolean   @default(false) @map("is_system_admin")
+  isRestricted  Boolean   @default(false) @map("is_restricted")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  labs          Lab[]
+  chatSessions  ChatSession[]
+  notifications Notification[]
+  labReports    LabReport[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Recipe {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?  @db.Text
+  software          String
+  versionConstraint String?  @map("version_constraint")
+  exploitFamily     String?  @map("exploit_family")
+  isActive          Boolean  @default(true) @map("is_active")
+
+  // Dockerfile generation fields
+  dockerfile        String?  @db.Text
+  sourceFiles       Json?    @map("source_files") // Array of {filename, content}
+  baseImage         String?  @map("base_image")
+  exposedPorts      Int[]    @default([]) @map("exposed_ports")
+  entrypoint        String?
+  vulnerabilityNotes String? @db.Text @map("vulnerability_notes")
+  dockerfileGeneratedAt DateTime? @map("dockerfile_generated_at")
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  labs              Lab[]
+  reports           LabReport[]
+
+  @@map("recipes")
+}
+
+model Lab {
+  id            String    @id @default(cuid())
+  ownerId       String    @map("owner_id")
+  recipeId      String    @map("recipe_id")
+  backendLabId  String?   @map("backend_lab_id") // UUID from OctoLab MVP backend
+  status        String    @default("requested")
+  connectionUrl String?   @map("connection_url")
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  owner   User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  recipe  Recipe      @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  reports LabReport[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([backendLabId])
+  @@map("labs")
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  type      String   // bug, feature, improvement, other
+  message   String   @db.Text
+  rating    Int?     // 1-5 star rating
+  page      String?  // URL/page where feedback was submitted
+  metadata  Json?    // Additional context (browser, screen size, etc.)
+  status    String   @default("new") // new, reviewed, resolved, archived
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@map("feedbacks")
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String   @map("session_id")
+  role      String   // "user" | "assistant"
+  content   String   @db.Text
+  metadata  Json?    // For storing suggestions, recipe data, lab info, etc.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String   @db.Text
+  type      String   @default("info") // info, success, warning, error, message
+  read      Boolean  @default(false)
+  link      String?  // Optional link to navigate to
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model LabReport {
+  id          String   @id @default(cuid())
+  labId       String   @map("lab_id")
+  recipeId    String   @map("recipe_id")
+  userId      String   @map("user_id")
+  issueType   String   @map("issue_type") // exploit_fails, wont_start, connection, wrong_version, other
+  attempted   String   @db.Text // What user tried
+  actual      String   @db.Text // What happened
+  expected    String?  @db.Text // Expected behavior (optional)
+  includeLogs Boolean  @default(false) @map("include_logs")
+  status      String   @default("open") // open, investigating, fixed, wont_fix, duplicate
+  adminNotes  String?  @db.Text @map("admin_notes")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  lab    Lab    @relation(fields: [labId], references: [id], onDelete: Cascade)
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([labId, userId]) // One report per lab per user
+  @@index([recipeId])
+  @@index([status])
+  @@map("lab_reports")
+}

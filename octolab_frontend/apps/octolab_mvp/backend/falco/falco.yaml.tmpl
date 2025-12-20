@@ -1,0 +1,84 @@
+# Falco Configuration for OctoLab
+# Generated configuration - BACKEND_URL placeholder will be replaced by entrypoint.sh
+#
+# See https://falco.org/docs/configuration/ for full documentation
+
+# Rules files to load
+rules_file:
+  - /etc/falco/octolab_rules.yaml
+
+# JSON output format for structured parsing
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+
+# Buffered stdout for performance
+buffered_outputs: true
+
+# Time format (ISO 8601)
+time_format_iso_8601: true
+
+# Logging configuration
+log_stderr: true
+log_syslog: false
+log_level: info
+
+# gRPC disabled (not needed for HTTP output)
+grpc:
+  enabled: false
+
+# Outputs configuration
+# Primary output: HTTP POST to backend ingestion endpoint
+http_output:
+  enabled: true
+  url: ${BACKEND_URL}/internal/falco/ingest
+  # Custom headers for authentication
+  user_agent: "Falco-OctoLab/1.0"
+  # Extra headers set via environment
+
+# Disable stdout output (use HTTP only)
+stdout_output:
+  enabled: false
+
+# Disable syslog output
+syslog_output:
+  enabled: false
+
+# File output disabled (evidence stored in database)
+file_output:
+  enabled: false
+
+# Program output disabled
+program_output:
+  enabled: false
+
+# Watch for config file changes
+watch_config_files: false
+
+# Syscall event drops configuration
+syscall_event_drops:
+  actions:
+    - log
+  rate: 0.03333
+  max_burst: 1
+
+# Kernel module / eBPF configuration
+# Use eBPF driver for better compatibility
+engine:
+  kind: modern_ebpf
+  modern_ebpf:
+    cpus_for_each_syscall_buffer: 2
+
+# Base syscalls to capture
+base_syscalls:
+  custom_set:
+    - execve
+    - execveat
+    - connect
+    - open
+    - openat
+    - read
+
+# Metrics configuration
+metrics:
+  enabled: false

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package user.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// User represents a user in the system
+message User {
+  string id = 1;
+  string clerk_id = 2;
+  string email = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string avatar_url = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// GetOrCreateMeRequest is the request for GetOrCreateMe RPC
+message GetOrCreateMeRequest {
+  // Empty for now, auth context comes from JWT
+}
+
+// GetOrCreateMeResponse is the response for GetOrCreateMe RPC
+message GetOrCreateMeResponse {
+  User user = 1;
+  bool created = 2;
+}
+
+// UpdateProfileRequest is the request for UpdateProfile RPC
+message UpdateProfileRequest {
+  string first_name = 1;
+  string last_name = 2;
+  string avatar_url = 3;
+}
+
+// UpdateProfileResponse is the response for UpdateProfile RPC
+message UpdateProfileResponse {
+  User user = 1;
+}
+
+// UserService provides user-related operations
+service UserService {
+  // GetOrCreateMe gets or creates the authenticated user
+  rpc GetOrCreateMe(GetOrCreateMeRequest) returns (GetOrCreateMeResponse);
+
+  // UpdateProfile updates the authenticated user's profile
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+}

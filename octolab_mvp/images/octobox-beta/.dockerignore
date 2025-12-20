@@ -1,0 +1,24 @@
+# .dockerignore for octobox-beta image
+#
+# Exclude everything by default, then explicitly include what's needed.
+# This keeps build context minimal and prevents accidental inclusion of
+# development artifacts.
+
+# Exclude everything
+*
+
+# Include only what the Dockerfile needs
+# --- Core Dockerfile artifacts ---
+!Dockerfile
+!rootfs/
+
+# --- Documentation (optional, not needed at build) ---
+# README.md is excluded to minimize context
+
+# --- Tests directory (needed for CI verification, but not for image) ---
+# tests/ is excluded from build context
+
+# NOTE: The cmdlog scripts are in rootfs/etc/ and rootfs/usr/local/bin/
+# and are explicitly included via !rootfs/ above.
+# If you modify cmdlog scripts and they don't appear in the container,
+# check that they're under rootfs/ and not excluded here.
